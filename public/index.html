@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monety — Préstamos Rápidos y Fáciles</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --teal: #1BA896;
+    --teal-dark: #138e7e;
+    --teal-light: #e8f7f5;
+    --teal-mid: #a8ddd8;
+    --gray-dark: #2d3748;
+    --gray: #4a5568;
+    --gray-light: #718096;
+    --gray-bg: #f7fafa;
+    --white: #ffffff;
+    --dark-card: #2c3e50;
+    --accent: #ff6b35;
+    --shadow-teal: 0 8px 32px rgba(27,168,150,0.18);
+    --shadow-card: 0 4px 24px rgba(45,55,72,0.10);
+    --radius: 20px;
+    --radius-sm: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--white);
+    color: var(--gray-dark);
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 60px;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(27,168,150,0.10);
+    transition: box-shadow 0.3s;
+  }
+  nav.scrolled { box-shadow: 0 2px 20px rgba(27,168,150,0.12); }
+
+  .logo {
+    font-family: 'Sora', sans-serif;
+    font-size: 26px; font-weight: 800;
+    color: var(--teal);
+    display: flex; align-items: center; gap: 8px;
+    text-decoration: none;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--teal);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 18px;
+  }
+
+  .nav-links { display: flex; gap: 36px; list-style: none; }
+  .nav-links a {
+    text-decoration: none; color: var(--gray);
+    font-weight: 500; font-size: 15px;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--teal); }
+
+  .nav-cta {
+    background: var(--teal); color: white;
+    padding: 12px 28px; border-radius: 50px;
+    font-weight: 700; font-size: 15px;
+    text-decoration: none;
+    box-shadow: var(--shadow-teal);
+    transition: background 0.2s, transform 0.2s;
+  }
+  .nav-cta:hover { background: var(--teal-dark); transform: translateY(-1px); }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 120px 60px 80px;
+    position: relative; overflow: hidden;
+    background: linear-gradient(135deg, #f0faf8 0%, #ffffff 60%, #e8f7f5 100%);
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute; top: -80px; right: -80px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(27,168,150,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .hero::after {
+    content: '';
+    position: absolute; bottom: -60px; left: 30%;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(27,168,150,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .hero-text { position: relative; z-index: 2; }
+
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--teal-light); color: var(--teal);
+    padding: 8px 18px; border-radius: 50px;
+    font-size: 13px; font-weight: 600;
+    margin-bottom: 28px;
+    border: 1px solid rgba(27,168,150,0.2);
+  }
+  .hero-badge-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--teal);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.3); }
+  }
+
+  .hero h1 {
+    font-family: 'Sora', sans-serif;
+    font-size: 56px; font-weight: 800;
+    line-height: 1.1; color: var(--gray-dark);
+    margin-bottom: 24px;
+  }
+  .hero h1 span { color: var(--teal); }
+
+  .hero p {
+    font-size: 18px; color: var(--gray-light);
+    line-height: 1.7; max-width: 480px;
+    margin-bottom: 40px;
+  }
+
+  .hero-actions { display: flex; gap: 16px; align-items: center; }
+
+  .btn-primary {
+    background: var(--teal); color: white;
+    padding: 16px 36px; border-radius: 50px;
+    font-weight: 700; font-size: 16px;
+    text-decoration: none; border: none; cursor: pointer;
+    box-shadow: var(--shadow-teal);
+    transition: all 0.25s;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .btn-primary:hover { background: var(--teal-dark); transform: translateY(-2px); box-shadow: 0 12px 36px rgba(27,168,150,0.30); }
+
+  .btn-secondary {
+    color: var(--teal); font-weight: 600; font-size: 16px;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+    transition: gap 0.2s;
+  }
+  .btn-secondary:hover { gap: 14px; }
+
+  .hero-stats {
+    display: flex; gap: 40px; margin-top: 56px;
+  }
+  .stat-item { text-align: left; }
+  .stat-num {
+    font-family: 'Sora', sans-serif;
+    font-size: 32px; font-weight: 800; color: var(--teal);
+  }
+  .stat-label { font-size: 13px; color: var(--gray-light); font-weight: 500; margin-top: 2px; }
+
+  /* Hero visual */
+  .hero-visual {
+    position: relative; z-index: 2;
+    display: flex; justify-content: center; align-items: center;
+  }
+
+  .hero-card-main {
+    background: white; border-radius: 28px;
+    padding: 36px; width: 340px;
+    box-shadow: 0 20px 60px rgba(27,168,150,0.15);
+    position: relative; z-index: 2;
+  }
+  .hero-card-label { font-size: 12px; color: var(--gray-light); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; }
+  .hero-amount { font-family: 'Sora', sans-serif; font-size: 42px; font-weight: 800; color: var(--gray-dark); }
+  .hero-amount span { font-size: 24px; color: var(--teal); }
+  .hero-slider-track { height: 6px; background: var(--teal-light); border-radius: 3px; margin: 20px 0; position: relative; }
+  .hero-slider-fill { height: 100%; width: 60%; background: var(--teal); border-radius: 3px; }
+  .hero-slider-thumb { width: 20px; height: 20px; background: var(--teal); border-radius: 50%; border: 3px solid white; box-shadow: var(--shadow-teal); position: absolute; top: -7px; left: 58%; }
+  .hero-card-row { display: flex; justify-content: space-between; margin-top: 16px; }
+  .hero-card-info { text-align: center; }
+  .hero-card-info-val { font-weight: 700; font-size: 18px; color: var(--gray-dark); }
+  .hero-card-info-key { font-size: 12px; color: var(--gray-light); margin-top: 2px; }
+  .hero-card-divider { width: 1px; background: #eee; }
+  .hero-cta-btn {
+    width: 100%; margin-top: 24px; padding: 14px;
+    background: var(--teal); color: white; border: none; border-radius: 14px;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .hero-cta-btn:hover { background: var(--teal-dark); }
+
+  .hero-card-float {
+    position: absolute;
+    background: white; border-radius: 16px;
+    padding: 14px 18px;
+    box-shadow: var(--shadow-card);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .hero-card-float.top { top: -20px; right: -40px; }
+  .hero-card-float.bottom { bottom: 20px; left: -50px; }
+  .float-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .float-icon.green { background: var(--teal-light); }
+  .float-icon.orange { background: #fff3ee; }
+  .float-text-main { font-weight: 700; font-size: 14px; color: var(--gray-dark); }
+  .float-text-sub { font-size: 12px; color: var(--gray-light); }
+
+  /* ── SECTION COMMON ── */
+  section { padding: 100px 60px; }
+  .section-tag {
+    font-size: 13px; font-weight: 700; color: var(--teal);
+    text-transform: uppercase; letter-spacing: 2px;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 42px; font-weight: 800; color: var(--gray-dark);
+    line-height: 1.2; margin-bottom: 20px;
+  }
+  .section-sub {
+    font-size: 17px; color: var(--gray-light); line-height: 1.7;
+    max-width: 560px;
+  }
+
+  /* ── WHY US ── */
+  .why-us {
+    background: var(--gray-bg);
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 80px; align-items: center;
+  }
+
+  .why-features { display: flex; flex-direction: column; gap: 28px; margin-top: 40px; }
+  .feature-item {
+    display: flex; gap: 20px; align-items: flex-start;
+    padding: 24px; background: white; border-radius: 18px;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.25s, box-shadow 0.25s;
+  }
+  .feature-item:hover { transform: translateX(6px); box-shadow: 0 8px 32px rgba(27,168,150,0.12); }
+  .feature-icon {
+    width: 52px; height: 52px; min-width: 52px;
+    background: var(--teal-light); border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .feature-title { font-weight: 700; font-size: 16px; color: var(--gray-dark); margin-bottom: 6px; }
+  .feature-desc { font-size: 14px; color: var(--gray-light); line-height: 1.6; }
+
+  .why-visual {
+    position: relative;
+    display: flex; justify-content: center; align-items: center;
+  }
+  .why-main-card {
+    background: var(--teal); color: white;
+    border-radius: 28px; padding: 40px;
+    width: 320px;
+    position: relative; z-index: 2;
+  }
+  .why-card-title { font-family: 'Sora', sans-serif; font-size: 22px; font-weight: 700; margin-bottom: 28px; }
+  .score-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .score-label { font-size: 14px; opacity: 0.85; }
+  .score-bar-wrap { flex: 1; margin: 0 14px; background: rgba(255,255,255,0.2); border-radius: 4px; height: 6px; }
+  .score-bar { height: 100%; border-radius: 4px; background: white; }
+  .score-val { font-weight: 700; font-size: 14px; }
+  .why-card-total { margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); display: flex; justify-content: space-between; align-items: center; }
+  .why-card-total-label { font-size: 13px; opacity: 0.85; }
+  .why-card-total-val { font-family: 'Sora', sans-serif; font-size: 28px; font-weight: 800; }
+  .why-badge { position: absolute; bottom: -20px; right: -30px; background: white; border-radius: 16px; padding: 14px 20px; box-shadow: var(--shadow-card); display: flex; align-items: center; gap: 10px; z-index: 3; }
+  .why-badge-icon { font-size: 22px; }
+  .why-badge-text { font-weight: 700; color: var(--gray-dark); font-size: 14px; }
+  .why-badge-sub { font-size: 12px; color: var(--teal); font-weight: 600; }
+
+  /* ── STEPS ── */
+  .steps { text-align: center; background: white; }
+  .steps-header { margin-bottom: 64px; }
+  .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+
+  .step-card {
+    padding: 40px 32px; border-radius: 24px;
+    position: relative; overflow: hidden;
+    transition: transform 0.25s, box-shadow 0.25s;
+  }
+  .step-card:hover { transform: translateY(-6px); box-shadow: 0 16px 48px rgba(27,168,150,0.15); }
+  .step-card.light { background: var(--teal-light); border: 1px solid rgba(27,168,150,0.15); }
+  .step-card.dark { background: var(--dark-card); color: white; }
+  .step-card.teal { background: var(--teal); color: white; }
+
+  .step-num {
+    font-family: 'Sora', sans-serif;
+    font-size: 72px; font-weight: 800;
+    opacity: 0.08; position: absolute;
+    top: -10px; right: 16px; line-height: 1;
+  }
+  .step-card.light .step-num { color: var(--teal); }
+  .step-card.dark .step-num, .step-card.teal .step-num { color: white; }
+
+  .step-icon-wrap {
+    width: 64px; height: 64px;
+    border-radius: 18px; margin: 0 auto 24px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+  }
+  .step-card.light .step-icon-wrap { background: white; }
+  .step-card.dark .step-icon-wrap { background: rgba(255,255,255,0.1); }
+  .step-card.teal .step-icon-wrap { background: rgba(255,255,255,0.2); }
+
+  .step-title { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+  .step-card.light .step-title { color: var(--gray-dark); }
+  .step-desc { font-size: 14px; line-height: 1.7; }
+  .step-card.light .step-desc { color: var(--gray-light); }
+  .step-card.dark .step-desc, .step-card.teal .step-desc { opacity: 0.8; }
+  .step-tag {
+    display: inline-block; margin-top: 20px;
+    padding: 6px 14px; border-radius: 50px;
+    font-size: 12px; font-weight: 600;
+  }
+  .step-card.light .step-tag { background: var(--teal); color: white; }
+  .step-card.dark .step-tag { background: rgba(255,255,255,0.15); color: white; }
+  .step-card.teal .step-tag { background: rgba(255,255,255,0.25); color: white; }
+
+  /* ── SIMULATOR ── */
+  .simulator {
+    background: linear-gradient(135deg, #f0faf8 0%, #e8f7f5 100%);
+  }
+  .sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start; }
+  .sim-form { background: white; border-radius: 28px; padding: 40px; box-shadow: var(--shadow-card); }
+  .sim-form h3 { font-family: 'Sora', sans-serif; font-size: 22px; font-weight: 700; margin-bottom: 28px; color: var(--gray-dark); }
+
+  .sim-label { font-size: 13px; font-weight: 600; color: var(--gray); margin-bottom: 8px; display: block; }
+  .sim-value { font-family: 'Sora', sans-serif; font-size: 38px; font-weight: 800; color: var(--teal); margin-bottom: 12px; }
+  .sim-range { width: 100%; -webkit-appearance: none; height: 6px; border-radius: 3px; background: var(--teal-light); outline: none; cursor: pointer; }
+  .sim-range::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--teal); border: 3px solid white; box-shadow: var(--shadow-teal); cursor: pointer; }
+  .sim-range-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--gray-light); margin-top: 6px; margin-bottom: 24px; }
+
+  .sim-select {
+    width: 100%; padding: 14px 16px; border: 2px solid #e2e8f0;
+    border-radius: 12px; font-size: 15px; color: var(--gray-dark);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    outline: none; cursor: pointer; appearance: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231BA896' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center;
+    transition: border-color 0.2s;
+    margin-bottom: 24px;
+  }
+  .sim-select:focus { border-color: var(--teal); }
+
+  .sim-result { background: var(--teal); color: white; border-radius: 24px; padding: 40px; }
+  .sim-result h3 { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 28px; opacity: 0.9; }
+  .sim-result-row { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.15); }
+  .sim-result-row:last-of-type { border: none; }
+  .sim-result-key { font-size: 14px; opacity: 0.8; }
+  .sim-result-val { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 700; }
+  .sim-result-big { margin-top: 20px; padding: 20px; background: rgba(255,255,255,0.15); border-radius: 16px; text-align: center; }
+  .sim-result-big-label { font-size: 13px; opacity: 0.8; margin-bottom: 8px; }
+  .sim-result-big-val { font-family: 'Sora', sans-serif; font-size: 40px; font-weight: 800; }
+  .sim-result-big-sub { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+  .sim-disclaimer { font-size: 12px; opacity: 0.65; margin-top: 20px; line-height: 1.6; }
+
+  /* ── FORM ── */
+  .form-section {
+    background: white;
+  }
+  .form-wrapper {
+    max-width: 860px; margin: 0 auto;
+    background: white; border-radius: 32px;
+    box-shadow: 0 8px 48px rgba(27,168,150,0.12);
+    overflow: hidden;
+    border: 1px solid rgba(27,168,150,0.10);
+  }
+
+  .form-steps-bar {
+    background: var(--teal); padding: 24px 40px;
+    display: flex; gap: 0;
+  }
+  .form-step-indicator {
+    display: flex; align-items: center; flex: 1;
+    cursor: pointer;
+  }
+  .form-step-circle {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(255,255,255,0.2); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; transition: all 0.3s;
+    flex-shrink: 0;
+  }
+  .form-step-circle.active { background: white; color: var(--teal); }
+  .form-step-circle.done { background: rgba(255,255,255,0.9); color: var(--teal); }
+  .form-step-info { margin-left: 12px; }
+  .form-step-num { font-size: 11px; opacity: 0.7; font-weight: 600; }
+  .form-step-name { font-size: 13px; font-weight: 700; color: white; }
+  .form-step-line { flex: 1; height: 2px; background: rgba(255,255,255,0.2); margin: 0 16px; }
+
+  .form-body { padding: 48px 48px 40px; }
+  .form-page { display: none; }
+  .form-page.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .form-page-title { font-family: 'Sora', sans-serif; font-size: 24px; font-weight: 700; color: var(--gray-dark); margin-bottom: 8px; }
+  .form-page-sub { font-size: 15px; color: var(--gray-light); margin-bottom: 36px; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-grid.cols-1 { grid-template-columns: 1fr; }
+  .col-full { grid-column: 1 / -1; }
+
+  .form-group { display: flex; flex-direction: column; }
+  .form-label { font-size: 13px; font-weight: 600; color: var(--gray); margin-bottom: 8px; }
+  .form-input, .form-select, .form-textarea {
+    padding: 14px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 15px; color: var(--gray-dark);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    background: white;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 4px rgba(27,168,150,0.10);
+  }
+  .form-select { appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231BA896' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }
+  .form-textarea { resize: vertical; min-height: 100px; }
+
+  .radio-group { display: flex; gap: 12px; flex-wrap: wrap; }
+  .radio-option { display: none; }
+  .radio-label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 20px; border: 2px solid #e2e8f0;
+    border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: 500;
+    color: var(--gray); transition: all 0.2s;
+  }
+  .radio-option:checked + .radio-label {
+    border-color: var(--teal); background: var(--teal-light);
+    color: var(--teal); font-weight: 700;
+  }
+  .radio-dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid currentColor; display: flex; align-items: center; justify-content: center;
+  }
+  .radio-option:checked + .radio-label .radio-dot::after {
+    content: ''; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--teal); display: block;
+  }
+
+  .form-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 28px; border-top: 1px solid #edf2f7; }
+  .btn-back {
+    padding: 14px 28px; border-radius: 50px; border: 2px solid #e2e8f0;
+    background: white; color: var(--gray); font-weight: 600; font-size: 15px;
+    cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif;
+    transition: border-color 0.2s;
+  }
+  .btn-back:hover { border-color: var(--teal); color: var(--teal); }
+  .btn-next {
+    padding: 14px 36px; border-radius: 50px; border: none;
+    background: var(--teal); color: white; font-weight: 700; font-size: 15px;
+    cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif;
+    box-shadow: var(--shadow-teal); transition: all 0.25s;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .btn-next:hover { background: var(--teal-dark); transform: translateY(-1px); }
+  .btn-next:disabled { background: #a0aec0; box-shadow: none; transform: none; cursor: not-allowed; }
+
+  .progress-bar { height: 4px; background: var(--teal-light); margin-bottom: 0; }
+  .progress-fill { height: 100%; background: var(--teal); transition: width 0.4s ease; }
+
+  .form-success {
+    display: none; text-align: center; padding: 60px 40px;
+    animation: fadeIn 0.4s ease;
+  }
+  .success-icon { font-size: 64px; margin-bottom: 24px; }
+  .success-title { font-family: 'Sora', sans-serif; font-size: 28px; font-weight: 800; color: var(--gray-dark); margin-bottom: 12px; }
+  .success-sub { font-size: 16px; color: var(--gray-light); line-height: 1.7; max-width: 480px; margin: 0 auto 32px; }
+  .success-ticket {
+    background: var(--teal-light); border-radius: 16px; padding: 20px 28px;
+    display: inline-block; margin-bottom: 32px;
+    border: 1px dashed var(--teal-mid);
+  }
+  .success-ticket-label { font-size: 12px; color: var(--teal); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .success-ticket-num { font-family: 'Sora', sans-serif; font-size: 28px; font-weight: 800; color: var(--teal); }
+
+  /* ── FOOTER ── */
+  footer {
+    background: var(--gray-dark); color: white;
+    padding: 60px;
+  }
+  .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
+  .footer-brand .logo { color: white; margin-bottom: 16px; display: inline-flex; }
+  .footer-desc { font-size: 14px; opacity: 0.65; line-height: 1.7; max-width: 280px; }
+  .footer-col h4 { font-weight: 700; font-size: 14px; margin-bottom: 16px; opacity: 0.9; }
+  .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .footer-col a { color: white; opacity: 0.6; text-decoration: none; font-size: 14px; transition: opacity 0.2s; }
+  .footer-col a:hover { opacity: 1; }
+  .footer-bottom { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 28px; display: flex; justify-content: space-between; align-items: center; }
+  .footer-bottom-text { font-size: 13px; opacity: 0.5; }
+  .footer-social { display: flex; gap: 12px; }
+  .social-btn { width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; text-decoration: none; color: white; font-size: 16px; transition: background 0.2s; }
+  .social-btn:hover { background: var(--teal); }
+
+  /* ── FLOATING WHATSAPP ── */
+  .whatsapp-fab {
+    position: fixed; bottom: 28px; right: 28px; z-index: 999;
+    width: 56px; height: 56px; background: #25d366; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 20px rgba(37,211,102,0.4);
+    text-decoration: none; font-size: 24px;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .whatsapp-fab:hover { transform: scale(1.1); box-shadow: 0 8px 32px rgba(37,211,102,0.5); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 1024px) {
+    nav { padding: 18px 32px; }
+    section { padding: 80px 32px; }
+    .hero { grid-template-columns: 1fr; padding: 120px 32px 60px; }
+    .hero-visual { display: none; }
+    .why-us { grid-template-columns: 1fr; }
+    .why-visual { display: none; }
+    .sim-grid { grid-template-columns: 1fr; }
+    .steps-grid { grid-template-columns: 1fr; }
+    .footer-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="navbar">
+  <a href="#" class="logo">
+    <div class="logo-icon">M</div>
+    Monety
+  </a>
+  <ul class="nav-links">
+    <li><a href="#como-funciona">¿Cómo funciona?</a></li>
+    <li><a href="#simulador">Simula tu crédito</a></li>
+    <li><a href="#solicitar">Solicitar préstamo</a></li>
+  </ul>
+  <a href="#solicitar" class="nav-cta">Solicita tu préstamo</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-text">
+    <div class="hero-badge">
+      <div class="hero-badge-dot"></div>
+      Préstamos aprobados en minutos
+    </div>
+    <h1>Préstamos <span>Rápidos y Fáciles</span> para Tu Futuro</h1>
+    <p>Obtén soluciones financieras accesibles y claras. Soluciona tus necesidades rápidamente con un proceso sin complicaciones.</p>
+    <div class="hero-actions">
+      <a href="#solicitar" class="btn-primary">
+        Solicitar ahora
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a href="#simulador" class="btn-secondary">
+        Simula tu crédito
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <div class="stat-num">+500</div>
+        <div class="stat-label">Clientes satisfechos</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">24h</div>
+        <div class="stat-label">Respuesta garantizada</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">98%</div>
+        <div class="stat-label">Tasa de aprobación</div>
+      </div>
+    </div>
+  </div>
+  <div class="hero-visual">
+    <div style="position:relative;">
+      <div class="hero-card-main">
+        <div class="hero-card-label">Monto solicitado</div>
+        <div class="hero-amount"><span>$</span>15,000</div>
+        <div class="hero-slider-track">
+          <div class="hero-slider-fill"></div>
+          <div class="hero-slider-thumb"></div>
+        </div>
+        <div class="hero-card-row">
+          <div class="hero-card-info">
+            <div class="hero-card-info-val">12</div>
+            <div class="hero-card-info-key">Meses</div>
+          </div>
+          <div class="hero-card-divider"></div>
+          <div class="hero-card-info">
+            <div class="hero-card-info-val">$1,626</div>
+            <div class="hero-card-info-key">Pago mensual</div>
+          </div>
+          <div class="hero-card-divider"></div>
+          <div class="hero-card-info">
+            <div class="hero-card-info-val">51.6%</div>
+            <div class="hero-card-info-key">Tasa anual</div>
+          </div>
+        </div>
+        <button class="hero-cta-btn">Solicitar este préstamo ✓</button>
+      </div>
+      <div class="hero-card-float top">
+        <div class="float-icon green">✅</div>
+        <div>
+          <div class="float-text-main">Aprobado</div>
+          <div class="float-text-sub">Hace 2 minutos</div>
+        </div>
+      </div>
+      <div class="hero-card-float bottom">
+        <div class="float-icon orange">⚡</div>
+        <div>
+          <div class="float-text-main">Depósito en 24h</div>
+          <div class="float-text-sub">A tu cuenta</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY US -->
+<section class="why-us" id="porque">
+  <div>
+    <div class="section-tag">Porque Monety es diferente</div>
+    <h2 class="section-title">Tu aliado financiero <span style="color:var(--teal)">confiable</span></h2>
+    <p class="section-sub">Con Monety, tu dinero fluye sin complicaciones. Te acompañamos desde el primer paso hasta que tengas el dinero en tu cuenta.</p>
+    <div class="why-features">
+      <div class="feature-item">
+        <div class="feature-icon">🛡️</div>
+        <div>
+          <div class="feature-title">Respaldo Total</div>
+          <div class="feature-desc">Con Monety, tu dinero fluye sin complicaciones. Te acompañamos desde el primer paso con transparencia total.</div>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">⚡</div>
+        <div>
+          <div class="feature-title">Proceso 100% Digital</div>
+          <div class="feature-desc">Sin papeleos, sin filas, sin complicaciones. Solicita tu préstamo desde donde estés en menos de 10 minutos.</div>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">💡</div>
+        <div>
+          <div class="feature-title">Tasas Claras y Justas</div>
+          <div class="feature-desc">Sin letra pequeña ni sorpresas. Conoce exactamente cuánto pagarás desde el primer momento.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="why-visual">
+    <div style="position:relative;">
+      <div class="why-main-card">
+        <div class="why-card-title">Tu Perfil Crediticio</div>
+        <div class="score-row">
+          <span class="score-label">Ingreso</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:70%"></div></div>
+          <span class="score-val">50 pts</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Historial</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:55%"></div></div>
+          <span class="score-val">40 pts</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Antigüedad</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:70%"></div></div>
+          <span class="score-val">30 pts</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">Cap. Pago</span>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:55%"></div></div>
+          <span class="score-val">20 pts</span>
+        </div>
+        <div class="why-card-total">
+          <span class="why-card-total-label">Puntaje Total</span>
+          <span class="why-card-total-val">140/140</span>
+        </div>
+      </div>
+      <div class="why-badge">
+        <span class="why-badge-icon">🏆</span>
+        <div>
+          <div class="why-badge-text">Pre-aprobado</div>
+          <div class="why-badge-sub">Ranking AAA</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STEPS -->
+<section class="steps" id="como-funciona">
+  <div class="steps-header">
+    <div class="section-tag" style="text-align:center">Así de fácil</div>
+    <h2 class="section-title">3 pasos para recibir <span style="color:var(--teal)">tu dinero</span></h2>
+  </div>
+  <div class="steps-grid">
+    <div class="step-card light">
+      <div class="step-num">01</div>
+      <div class="step-icon-wrap">📝</div>
+      <div class="step-title">Solicita tu préstamo</div>
+      <p class="step-desc">Llena nuestro formulario rápido y sencillo con tus datos personales y laborales. ¡Es fácil y sin trámites largos!</p>
+      <div><span class="step-tag">~5 minutos</span></div>
+    </div>
+    <div class="step-card dark">
+      <div class="step-num">02</div>
+      <div class="step-icon-wrap">🔍</div>
+      <div class="step-title">Conoce tu opción</div>
+      <p class="step-desc">Recibirás una rápida respuesta con el monto propuesto y las condiciones de tu crédito personalizado.</p>
+      <div><span class="step-tag">En horas</span></div>
+    </div>
+    <div class="step-card teal">
+      <div class="step-num">03</div>
+      <div class="step-icon-wrap">💳</div>
+      <div class="step-title">Recibe tu dinero</div>
+      <p class="step-desc">Aprobamos tu préstamo y en breve lo depositamos directamente en tu cuenta. ¡Fácil y sin retrasos!</p>
+      <div><span class="step-tag">24-48 horas</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- SIMULATOR -->
+<section class="simulator" id="simulador">
+  <div style="text-align:center; margin-bottom:60px;">
+    <div class="section-tag">Herramienta gratuita</div>
+    <h2 class="section-title">Simula tu crédito <span style="color:var(--teal)">al instante</span></h2>
+    <p class="section-sub" style="margin:0 auto;">Ajusta los parámetros y descubre cuánto pagarías. Sin compromiso.</p>
+  </div>
+  <div class="sim-grid">
+    <div>
+      <div class="sim-form">
+        <h3>Configura tu préstamo</h3>
+        <span class="sim-label">Monto que necesitas</span>
+        <div class="sim-value" id="simMonto">$15,000</div>
+        <input type="range" class="sim-range" id="montoRange" min="3000" max="80000" step="1000" value="15000" oninput="calcSimulator()">
+        <div class="sim-range-labels"><span>$3,000</span><span>$80,000</span></div>
+
+        <span class="sim-label">Plazo (meses)</span>
+        <select class="sim-select" id="plazoSelect" onchange="calcSimulator()">
+          <option value="3">3 meses</option>
+          <option value="6">6 meses</option>
+          <option value="9">9 meses</option>
+          <option value="12" selected>12 meses</option>
+          <option value="18">18 meses</option>
+          <option value="24">24 meses</option>
+          <option value="30">30 meses</option>
+          <option value="36">36 meses</option>
+        </select>
+
+        <span class="sim-label">Tipo de crédito</span>
+        <select class="sim-select" id="tipoCredito" onchange="calcSimulator()">
+          <option value="nomina">Nómina</option>
+          <option value="personal">Personal</option>
+        </select>
+      </div>
+    </div>
+    <div class="sim-result">
+      <h3>📊 Tu propuesta estimada</h3>
+      <div class="sim-result-row">
+        <span class="sim-result-key">Monto financiado</span>
+        <span class="sim-result-val" id="rMonto">$15,000</span>
+      </div>
+      <div class="sim-result-row">
+        <span class="sim-result-key">Tasa nominal anual</span>
+        <span class="sim-result-val" id="rTasa">51.6%</span>
+      </div>
+      <div class="sim-result-row">
+        <span class="sim-result-key">CAT anual</span>
+        <span class="sim-result-val" id="rCAT">59.9%</span>
+      </div>
+      <div class="sim-result-row">
+        <span class="sim-result-key">Plazo</span>
+        <span class="sim-result-val" id="rPlazo">12 meses</span>
+      </div>
+      <div class="sim-result-row">
+        <span class="sim-result-key">Total a pagar</span>
+        <span class="sim-result-val" id="rTotal">$20,600</span>
+      </div>
+      <div class="sim-result-big">
+        <div class="sim-result-big-label">Pago mensual estimado</div>
+        <div class="sim-result-big-val" id="rPago">$1,626</div>
+        <div class="sim-result-big-sub">Incluye capital + intereses + IVA</div>
+      </div>
+      <p class="sim-disclaimer">* Cálculo ilustrativo. La propuesta final depende del análisis de tu perfil. Tasa sujeta a evaluación crediticia. CAT calculado con fines informativos.</p>
+      <a href="#solicitar" class="btn-primary" style="margin-top:20px; width:100%; justify-content:center;">
+        Solicitar este crédito →
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FORM -->
+<section class="form-section" id="solicitar">
+  <div style="text-align:center; margin-bottom:48px;">
+    <div class="section-tag">Proceso 100% digital</div>
+    <h2 class="section-title">Solicita tu préstamo <span style="color:var(--teal)">hoy</span></h2>
+    <p class="section-sub" style="margin:0 auto;">Completa el formulario en menos de 10 minutos. Sin papeleos, sin filas.</p>
+  </div>
+  <div class="form-wrapper">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:25%"></div></div>
+    <div class="form-steps-bar">
+      <div class="form-step-indicator" onclick="goToStep(1)">
+        <div class="form-step-circle active" id="stepCircle1">1</div>
+        <div class="form-step-info">
+          <div class="form-step-num">PASO 1</div>
+          <div class="form-step-name">Datos Personales</div>
+        </div>
+      </div>
+      <div class="form-step-line"></div>
+      <div class="form-step-indicator" onclick="goToStep(2)">
+        <div class="form-step-circle" id="stepCircle2">2</div>
+        <div class="form-step-info">
+          <div class="form-step-num">PASO 2</div>
+          <div class="form-step-name">Datos Laborales</div>
+        </div>
+      </div>
+      <div class="form-step-line"></div>
+      <div class="form-step-indicator" onclick="goToStep(3)">
+        <div class="form-step-circle" id="stepCircle3">3</div>
+        <div class="form-step-info">
+          <div class="form-step-num">PASO 3</div>
+          <div class="form-step-name">Crédito y Finanzas</div>
+        </div>
+      </div>
+      <div class="form-step-line"></div>
+      <div class="form-step-indicator" onclick="goToStep(4)">
+        <div class="form-step-circle" id="stepCircle4">4</div>
+        <div class="form-step-info">
+          <div class="form-step-num">PASO 4</div>
+          <div class="form-step-name">Confirmación</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-body">
+      <!-- STEP 1: Datos personales -->
+      <div class="form-page active" id="page1">
+        <div class="form-page-title">👤 Datos Personales</div>
+        <p class="form-page-sub">Necesitamos conocerte para evaluar tu solicitud.</p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Nombre(s) *</label>
+            <input type="text" class="form-input" id="nombres" placeholder="Ej. Juan Pablo" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Apellido Paterno *</label>
+            <input type="text" class="form-input" id="apellidoPat" placeholder="Ej. González" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Apellido Materno *</label>
+            <input type="text" class="form-input" id="apellidoMat" placeholder="Ej. Santillán" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Edad *</label>
+            <input type="number" class="form-input" id="edad" placeholder="Ej. 30" min="18" max="75" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">CURP *</label>
+            <input type="text" class="form-input" id="curp" placeholder="18 caracteres" maxlength="18" style="text-transform:uppercase">
+          </div>
+          <div class="form-group">
+            <label class="form-label">RFC</label>
+            <input type="text" class="form-input" id="rfc" placeholder="13 caracteres" maxlength="13" style="text-transform:uppercase">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono celular *</label>
+            <input type="tel" class="form-input" id="telefono" placeholder="10 dígitos" maxlength="10">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Correo electrónico *</label>
+            <input type="email" class="form-input" id="email" placeholder="tu@correo.com">
+          </div>
+        </div>
+        <div style="margin-top:24px;">
+          <div class="section-tag" style="font-size:12px; margin-bottom:14px;">DOMICILIO</div>
+          <div class="form-grid cols-3">
+            <div class="form-group">
+              <label class="form-label">Entidad Federativa *</label>
+              <select class="form-select" id="estado">
+                <option value="">Selecciona...</option>
+                <option value="CDMX">Ciudad de México</option>
+                <option value="MEXICO">Estado de México</option>
+                <option value="JALISCO">Jalisco</option>
+                <option value="NUEVO LEON">Nuevo León</option>
+                <option value="PUEBLA">Puebla</option>
+                <option value="OTRO">Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Alcaldía / Municipio *</label>
+              <select class="form-select" id="alcaldia">
+                <option value="">Selecciona...</option>
+                <option>Álvaro Obregón</option><option>Azcapotzalco</option>
+                <option>Benito Juárez</option><option>Coyoacán</option>
+                <option>Cuajimalpa</option><option>Cuauhtémoc</option>
+                <option>Gustavo A. Madero</option><option>Iztacalco</option>
+                <option>Iztapalapa</option><option>Magdalena Contreras</option>
+                <option>Miguel Hidalgo</option><option>Milpa Alta</option>
+                <option>Tláhuac</option><option>Tlalpan</option>
+                <option>Venustiano Carranza</option><option>Xochimilco</option>
+                <option>Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Código Postal *</label>
+              <input type="text" class="form-input" id="cp" placeholder="5 dígitos" maxlength="5">
+            </div>
+            <div class="form-group col-full">
+              <label class="form-label">Calle y número *</label>
+              <input type="text" class="form-input" id="calle" placeholder="Ej. Av. Insurgentes 1234 Int. 5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Colonia *</label>
+              <input type="text" class="form-input" id="colonia" placeholder="Ej. Del Valle">
+            </div>
+          </div>
+        </div>
+        <div class="form-footer">
+          <div></div>
+          <button class="btn-next" onclick="nextStep(2)">
+            Continuar <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 2: Datos laborales -->
+      <div class="form-page" id="page2">
+        <div class="form-page-title">🏢 Datos Laborales</div>
+        <p class="form-page-sub">Tu historial y situación laboral son clave en nuestra evaluación.</p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Empresa donde laboras *</label>
+            <select class="form-select" id="empresa">
+              <option value="">Selecciona tu empresa...</option>
+              <option>BINOMIA</option>
+              <option>ZINAPZIA</option>
+              <option>VIVA HEALTHY</option>
+              <option>ACHEME</option>
+              <option>OTRA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo de nómina *</label>
+            <select class="form-select" id="tipoNomina">
+              <option value="">Selecciona...</option>
+              <option value="MENSUAL">Mensual</option>
+              <option value="QUINCENAL">Quincenal</option>
+              <option value="SEMANAL">Semanal</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha de ingreso a la empresa *</label>
+            <input type="date" class="form-input" id="fechaIngreso">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha estimada de baja *</label>
+            <input type="date" class="form-input" id="fechaBaja">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Salario mensual bruto (MXN) *</label>
+            <input type="number" class="form-input" id="salarioBruto" placeholder="Ej. 10,000" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Salario mensual neto (MXN) *</label>
+            <input type="number" class="form-input" id="salarioNeto" placeholder="Ej. 8,500" min="0">
+          </div>
+        </div>
+        <div style="margin-top:24px;">
+          <label class="form-label" style="margin-bottom:12px; display:block;">Historial crediticio aproximado *</label>
+          <div class="radio-group">
+            <input type="radio" name="historial" id="hExcelente" class="radio-option" value="EXCELENTE">
+            <label for="hExcelente" class="radio-label"><div class="radio-dot"></div>🌟 Excelente (800+)</label>
+            <input type="radio" name="historial" id="hMuyBueno" class="radio-option" value="MUY_BUENO">
+            <label for="hMuyBueno" class="radio-label"><div class="radio-dot"></div>⭐ Muy Bueno (700-799)</label>
+            <input type="radio" name="historial" id="hBueno" class="radio-option" value="BUENO">
+            <label for="hBueno" class="radio-label"><div class="radio-dot"></div>✅ Bueno (650-699)</label>
+            <input type="radio" name="historial" id="hMedio" class="radio-option" value="MEDIO_BAJO">
+            <label for="hMedio" class="radio-label"><div class="radio-dot"></div>📊 Medio/Bajo (–649)</label>
+          </div>
+        </div>
+        <div class="form-footer">
+          <button class="btn-back" onclick="nextStep(1)">← Regresar</button>
+          <button class="btn-next" onclick="nextStep(3)">
+            Continuar <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Crédito y finanzas -->
+      <div class="form-page" id="page3">
+        <div class="form-page-title">💰 Datos del Crédito y Finanzas</div>
+        <p class="form-page-sub">Cuéntanos qué necesitas y cómo están tus finanzas actuales.</p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Tipo de crédito *</label>
+            <select class="form-select" id="tipoCredForm">
+              <option value="NOMINA">Crédito de Nómina</option>
+              <option value="PERSONAL">Crédito Personal</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Monto solicitado (MXN) *</label>
+            <input type="number" class="form-input" id="montoForm" placeholder="Ej. 15,000" min="3000" max="80000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Plazo deseado (meses) *</label>
+            <select class="form-select" id="plazoForm">
+              <option value="3">3 meses</option>
+              <option value="6">6 meses</option>
+              <option value="9">9 meses</option>
+              <option value="12" selected>12 meses</option>
+              <option value="18">18 meses</option>
+              <option value="24">24 meses</option>
+              <option value="30">30 meses</option>
+              <option value="36">36 meses</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gastos personales mensuales (MXN) *</label>
+            <input type="number" class="form-input" id="gastos" placeholder="Ej. 5,000" min="0">
+          </div>
+        </div>
+        <div style="margin-top:24px; margin-bottom:20px;">
+          <label class="form-label" style="margin-bottom:12px; display:block;">¿Tiene otras deudas o créditos activos? *</label>
+          <div class="radio-group">
+            <input type="radio" name="deudas" id="dNo" class="radio-option" value="NO" checked>
+            <label for="dNo" class="radio-label"><div class="radio-dot"></div>No tengo deudas</label>
+            <input type="radio" name="deudas" id="dSi" class="radio-option" value="SI">
+            <label for="dSi" class="radio-label"><div class="radio-dot"></div>Sí tengo deudas</label>
+          </div>
+        </div>
+        <div id="deudasSection" style="display:none;">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">Tipo de deuda</label>
+              <select class="form-select" id="tipoDeuda">
+                <option value="No Aplica">Selecciona...</option>
+                <option>Tarjeta de crédito</option>
+                <option>Crédito automotriz</option>
+                <option>Crédito hipotecario</option>
+                <option>Crédito personal</option>
+                <option>INFONAVIT</option>
+                <option>Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pago mensual de deudas (MXN)</label>
+              <input type="number" class="form-input" id="pagoDeudas" placeholder="Ej. 2,000" min="0">
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <label class="form-label" style="margin-bottom:12px; display:block;">¿Tiene descuento de INFONAVIT en nómina?</label>
+          <div class="radio-group">
+            <input type="radio" name="infonavit" id="iNo" class="radio-option" value="NO" checked>
+            <label for="iNo" class="radio-label"><div class="radio-dot"></div>No</label>
+            <input type="radio" name="infonavit" id="iSi" class="radio-option" value="SI">
+            <label for="iSi" class="radio-label"><div class="radio-dot"></div>Sí</label>
+          </div>
+        </div>
+        <div class="form-footer">
+          <button class="btn-back" onclick="nextStep(2)">← Regresar</button>
+          <button class="btn-next" onclick="nextStep(4)">
+            Revisar solicitud <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 4: Review & Submit -->
+      <div class="form-page" id="page4">
+        <div class="form-page-title">✅ Confirma tu solicitud</div>
+        <p class="form-page-sub">Revisa tu información antes de enviar. Nos pondremos en contacto contigo en menos de 24 horas.</p>
+        <div id="summaryBox" style="background:var(--gray-bg); border-radius:16px; padding:28px; margin-bottom:24px; line-height:2;"></div>
+        <div style="background:var(--teal-light); border-radius:14px; padding:20px 24px; border-left:4px solid var(--teal); margin-bottom:24px;">
+          <p style="font-size:14px; color:var(--gray-dark); line-height:1.7;">
+            <strong>🔒 Aviso de privacidad:</strong> Tus datos serán utilizados exclusivamente para evaluar tu solicitud de crédito. No compartimos tu información con terceros sin tu consentimiento.
+          </p>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:12px; margin-bottom:8px;">
+          <input type="checkbox" id="terminos" style="width:18px;height:18px;margin-top:2px;accent-color:var(--teal)">
+          <label for="terminos" style="font-size:14px; color:var(--gray); cursor:pointer; line-height:1.6;">
+            Acepto los <a href="#" style="color:var(--teal)">Términos y Condiciones</a> y el <a href="#" style="color:var(--teal)">Aviso de Privacidad</a> de Monety. Autorizo la consulta de mi historial crediticio en el Buró de Crédito.
+          </label>
+        </div>
+        <div class="form-footer">
+          <button class="btn-back" onclick="nextStep(3)">← Regresar</button>
+          <button class="btn-next" onclick="submitForm()" id="submitBtn">
+            🚀 Enviar solicitud
+          </button>
+        </div>
+      </div>
+
+      <!-- SUCCESS -->
+      <div class="form-success" id="successPage">
+        <div class="success-icon">🎉</div>
+        <div class="success-title">¡Solicitud enviada con éxito!</div>
+        <p class="success-sub">Tu solicitud ha sido recibida y está en proceso de evaluación. Nuestro equipo se comunicará contigo en las próximas 24 horas.</p>
+        <div class="success-ticket">
+          <div class="success-ticket-label">Número de folio</div>
+          <div class="success-ticket-num" id="folioNum">#MNT-000000</div>
+        </div>
+        <div id="scoringResult"></div>
+        <br>
+        <a href="#" class="btn-primary" onclick="resetForm(); return false;">Hacer otra solicitud</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <a href="#" class="logo">
+        <div class="logo-icon">M</div>
+        Monety
+      </a>
+      <p class="footer-desc">Soluciones financieras accesibles y transparentes para trabajadores mexicanos. Tu aliado financiero confiable.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Productos</h4>
+      <ul>
+        <li><a href="#">Crédito de Nómina</a></li>
+        <li><a href="#">Crédito Personal</a></li>
+        <li><a href="#">Simulador</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Empresa</h4>
+      <ul>
+        <li><a href="#">Quiénes somos</a></li>
+        <li><a href="#">Contacto</a></li>
+        <li><a href="#">Blog</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <ul>
+        <li><a href="#">Términos y Condiciones</a></li>
+        <li><a href="#">Aviso de Privacidad</a></li>
+        <li><a href="#">CAT y Tasas</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span class="footer-bottom-text">© 2026 Monety. Todos los derechos reservados. SOFOM ENR.</span>
+    <div class="footer-social">
+      <a href="#" class="social-btn">📸</a>
+      <a href="#" class="social-btn">💼</a>
+      <a href="#" class="social-btn">💬</a>
+    </div>
+  </div>
+</footer>
+
+<a href="https://wa.me/525500000000" class="whatsapp-fab" target="_blank">💬</a>
+
+<script>
+  // NAV SCROLL
+  window.addEventListener('scroll', () => {
+    document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+  });
+
+  // SHOW/HIDE DEUDAS SECTION
+  document.querySelectorAll('[name="deudas"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('deudasSection').style.display = r.value === 'SI' ? 'block' : 'none';
+    });
+  });
+
+  // ── SIMULATOR ──
+  function calcSimulator() {
+    const monto = parseInt(document.getElementById('montoRange').value);
+    const plazo = parseInt(document.getElementById('plazoSelect').value);
+    const tipo = document.getElementById('tipoCredito').value;
+
+    // Tasas por tipo (D = 51.6% nominal anual para nómina, personal un poco más)
+    const tasaAnual = tipo === 'nomina' ? 0.516 : 0.60;
+    const tasaMensual = tasaAnual / 12;
+    const iva = 0.16;
+    const cat = tipo === 'nomina' ? 0.59856 : 0.72;
+
+    // Pago mensual con fórmula de amortización
+    let pago;
+    if (tasaMensual === 0) {
+      pago = monto / plazo;
+    } else {
+      const interes = tasaMensual * (1 + iva);
+      pago = monto * (interes * Math.pow(1 + interes, plazo)) / (Math.pow(1 + interes, plazo) - 1);
+    }
+
+    const total = pago * plazo;
+
+    document.getElementById('simMonto').textContent = '$' + monto.toLocaleString('es-MX');
+    document.getElementById('rMonto').textContent = '$' + monto.toLocaleString('es-MX');
+    document.getElementById('rTasa').textContent = (tasaAnual * 100).toFixed(1) + '%';
+    document.getElementById('rCAT').textContent = (cat * 100).toFixed(1) + '%';
+    document.getElementById('rPlazo').textContent = plazo + ' meses';
+    document.getElementById('rTotal').textContent = '$' + Math.round(total).toLocaleString('es-MX');
+    document.getElementById('rPago').textContent = '$' + Math.round(pago).toLocaleString('es-MX');
+  }
+  calcSimulator();
+
+  // ── MULTI-STEP FORM ──
+  let currentStep = 1;
+  const totalSteps = 4;
+
+  function nextStep(step) {
+    document.getElementById('page' + currentStep).classList.remove('active');
+    currentStep = step;
+    document.getElementById('page' + step).classList.add('active');
+    updateStepUI();
+    if (step === 4) buildSummary();
+    document.getElementById('solicitar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function goToStep(step) {
+    if (step < currentStep) nextStep(step);
+  }
+
+  function updateStepUI() {
+    const pct = (currentStep / totalSteps) * 100;
+    document.getElementById('progressFill').style.width = pct + '%';
+    for (let i = 1; i <= 4; i++) {
+      const c = document.getElementById('stepCircle' + i);
+      c.className = 'form-step-circle';
+      if (i < currentStep) c.classList.add('done'), c.textContent = '✓';
+      else if (i === currentStep) c.classList.add('active'), c.textContent = i;
+      else c.textContent = i;
+    }
+  }
+
+  function buildSummary() {
+    const g = (id) => document.getElementById(id)?.value || '—';
+    const html = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 32px;font-size:14px;">
+        <div><span style="color:var(--gray-light)">Nombre completo</span><br><strong>${g('nombres')} ${g('apellidoPat')} ${g('apellidoMat')}</strong></div>
+        <div><span style="color:var(--gray-light)">Edad</span><br><strong>${g('edad')} años</strong></div>
+        <div><span style="color:var(--gray-light)">Email</span><br><strong>${g('email')}</strong></div>
+        <div><span style="color:var(--gray-light)">Teléfono</span><br><strong>${g('telefono')}</strong></div>
+        <div><span style="color:var(--gray-light)">Empresa</span><br><strong>${g('empresa')}</strong></div>
+        <div><span style="color:var(--gray-light)">Nómina</span><br><strong>${g('tipoNomina')}</strong></div>
+        <div><span style="color:var(--gray-light)">Salario bruto mensual</span><br><strong>$${parseInt(g('salarioBruto')||0).toLocaleString('es-MX')}</strong></div>
+        <div><span style="color:var(--gray-light)">Historial crediticio</span><br><strong>${document.querySelector('[name="historial"]:checked')?.value || '—'}</strong></div>
+        <div><span style="color:var(--gray-light)">Tipo de crédito</span><br><strong>${g('tipoCredForm')}</strong></div>
+        <div><span style="color:var(--gray-light)">Monto solicitado</span><br><strong>$${parseInt(g('montoForm')||0).toLocaleString('es-MX')}</strong></div>
+        <div><span style="color:var(--gray-light)">Plazo</span><br><strong>${g('plazoForm')} meses</strong></div>
+        <div><span style="color:var(--gray-light)">Tiene deudas</span><br><strong>${document.querySelector('[name="deudas"]:checked')?.value || '—'}</strong></div>
+      </div>`;
+    document.getElementById('summaryBox').innerHTML = html;
+  }
+
+  // ── API CONFIG ──────────────────────────────────────────────
+  // En producción (Railway) el HTML lo sirve el mismo Express → ruta relativa
+  // En desarrollo (archivo local) apunta a localhost
+  const API_BASE = window.location.protocol === 'file:'
+    ? 'http://localhost:4000/api/v1'
+    : '/api/v1';
+
+  // Mapa empresa nombre → ID (sincronizado con la BD)
+  // Se sobreescribe en loadEmpresas() si el backend está disponible
+  let empresaMap = { BINOMIA:1, ZINAPZIA:2, 'VIVA HEALTHY':3, ACHEME:4, OTRA:5 };
+
+  // Carga empresas desde el backend al abrir la página
+  async function loadEmpresas() {
+    try {
+      const res  = await fetch(`${API_BASE}/empresas`);
+      const data = await res.json();
+      if (data.ok && data.empresas.length) {
+        empresaMap = {};
+        const sel = document.getElementById('empresa');
+        sel.innerHTML = '<option value="">Selecciona tu empresa...</option>';
+        data.empresas.forEach(e => {
+          empresaMap[e.nombre] = e.id;
+          const opt = document.createElement('option');
+          opt.value = e.id;          // el value ya es el ID
+          opt.textContent = e.nombre;
+          sel.appendChild(opt);
+        });
+      }
+    } catch {
+      // Si el backend no responde usa los valores hardcodeados (modo offline)
+    }
+  }
+  loadEmpresas();
+
+  // ── SUBMIT REAL ──────────────────────────────────────────────
+  async function submitForm() {
+    if (!document.getElementById('terminos').checked) {
+      alert('Por favor acepta los Términos y Condiciones para continuar.');
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Enviando...';
+
+    const g = id => (document.getElementById(id)?.value || '').trim();
+
+    // Resolver empresaId: si el select ya tiene value numérico úsalo, si no mapea por nombre
+    const empRaw    = g('empresa');
+    const empresaId = isNaN(parseInt(empRaw))
+      ? (empresaMap[empRaw] || 1)
+      : parseInt(empRaw);
+
+    const historialCrediticio = document.querySelector('[name="historial"]:checked')?.value || 'BUENO';
+    const tieneDeudas  = document.querySelector('[name="deudas"]:checked')?.value === 'SI';
+    const tieneInfo    = document.querySelector('[name="infonavit"]:checked')?.value === 'SI';
+
+    const payload = {
+      // Personales
+      nombres:      g('nombres'),
+      apellidoPat:  g('apellidoPat'),
+      apellidoMat:  g('apellidoMat'),
+      edad:         parseInt(g('edad')) || null,
+      curp:         g('curp') || undefined,
+      rfc:          g('rfc')  || undefined,
+      email:        g('email'),
+      telefono:     g('telefono'),
+      // Domicilio
+      calle:        g('calle'),
+      colonia:      g('colonia'),
+      alcaldiaMpio: g('alcaldia'),
+      entidad:      g('estado'),
+      cp:           g('cp'),
+      // Laborales
+      empresaId,
+      tipoNomina:       g('tipoNomina'),
+      fechaIngresoEmp:  g('fechaIngreso'),
+      fechaBajaEstim:   g('fechaBaja'),
+      salarioBruto:     parseFloat(g('salarioBruto')) || 0,
+      salarioNeto:      parseFloat(g('salarioNeto'))  || 0,
+      historialCrediticio,
+      // Crédito
+      tipoCredito:      g('tipoCredForm'),
+      montoSolicitado:  parseFloat(g('montoForm'))  || 0,
+      plazoMeses:       parseInt(g('plazoForm'))     || 12,
+      gastos:           parseFloat(g('gastos'))      || 0,
+      tieneDeudas,
+      tipoDeuda:        tieneDeudas ? g('tipoDeuda') : undefined,
+      pagoMensualDeudas:tieneDeudas ? parseFloat(g('pagoDeudas')) || 0 : 0,
+      tieneInfonavit:   tieneInfo,
+    };
+
+    try {
+      const res  = await fetch(`${API_BASE}/solicitudes`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Mostrar error de validación si lo hay
+        const msg = data.errors
+          ? data.errors.map(e => `• ${e.field}: ${e.message}`).join('\n')
+          : (data.message || 'Error al enviar la solicitud');
+        alert('Error:\n' + msg);
+        btn.disabled = false;
+        btn.textContent = '🚀 Enviar solicitud';
+        return;
+      }
+
+      // ── Éxito: mostrar folio real de la BD ──
+      for (let i = 1; i <= 4; i++) {
+        document.getElementById('page' + i).classList.remove('active');
+      }
+      document.getElementById('folioNum').textContent = data.folio;
+
+      // Mostrar resultado del scoring al usuario
+      const scoring = data.scoring || {};
+      const successPage = document.getElementById('successPage');
+      successPage.style.display = 'block';
+
+      // Agregar info del scoring si viene aprobado
+      if (scoring.aprobado !== undefined) {
+        const scoreEl = document.getElementById('scoringResult');
+        if (scoreEl) {
+          scoreEl.innerHTML = scoring.aprobado
+            ? `<div style="background:#e8f7f5;border-radius:12px;padding:16px 20px;margin-top:16px;border:1px solid #a8ddd8">
+                 <div style="font-weight:700;color:#1BA896;margin-bottom:6px">✅ ¡Pre-aprobado! Ranking: ${scoring.ranking}</div>
+                 <div style="font-size:14px;color:#4a5568">Pago mensual estimado: <strong>$${(scoring.pagoMensual||0).toLocaleString('es-MX',{minimumFractionDigits:2})}</strong></div>
+               </div>`
+            : `<div style="background:#fff5f5;border-radius:12px;padding:16px 20px;margin-top:16px;border:1px solid #fcc">
+                 <div style="font-weight:700;color:#c53030;margin-bottom:6px">📋 En revisión</div>
+                 <div style="font-size:14px;color:#4a5568">${scoring.motivoRechazo || 'Un agente revisará tu solicitud.'}</div>
+               </div>`;
+        }
+      }
+
+      document.getElementById('progressFill').style.width = '100%';
+
+    } catch (err) {
+      alert('No se pudo conectar con el servidor.\n\nVerifica que el backend esté corriendo en localhost:4000\n\nError: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = '🚀 Enviar solicitud';
+    }
+  }
+
+  function resetForm() {
+    document.getElementById('successPage').style.display = 'none';
+    currentStep = 1;
+    document.getElementById('page1').classList.add('active');
+    updateStepUI();
+  }
+</script>
+</body>
+</html>
