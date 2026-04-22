@@ -13,9 +13,9 @@ const PREFIX = process.env.API_PREFIX || '/api/v1';
 /* ── Seguridad ────────────────────────────────────────────── Se pone en lo que se corren las pruebas*/
 app.use(helmet.contentSecurityPolicy({
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"], // ⚠️
-      scriptSrcAttr: ["'unsafe-inline'"],       // ⚠️
+      defaultSrc: ['self'],
+      scriptSrc: ['self', 'unsafe-inline'], // ⚠️
+      scriptSrcAttr: ['unsafe-inline'],       // ⚠️
     },
   })
 );
