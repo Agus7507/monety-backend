@@ -10,8 +10,23 @@ const { globalErrorHandler } = require('./middleware/errorHandler');
 const app    = express();
 const PREFIX = process.env.API_PREFIX || '/api/v1';
 
-/* ── Seguridad ────────────────────────────────────────────── Se pone en lo que se corren las pruebas*/
-app.use(helmet());
+/* ── Seguridad ────────────────────────────────────────────── */
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:     ["'self'"],
+      scriptSrc:      ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "cdnjs.cloudflare.com"],
+      scriptSrcAttr:  ["'unsafe-inline'"],   // permite onclick="..." en el HTML
+      styleSrc:       ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
+      fontSrc:        ["'self'", "fonts.gstatic.com", "fonts.googleapis.com"],
+      imgSrc:         ["'self'", "data:", "https:"],
+      connectSrc:     ["'self'"],
+      frameSrc:       ["'none'"],
+      objectSrc:      ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,   // evita problemas con fuentes externas
+}));
 
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
   .split(',').map(o => o.trim());
@@ -20,9 +35,11 @@ const isDev = (process.env.NODE_ENV || 'development') === 'development';
 
 app.use(cors({
   origin: (origin, cb) => {
-    // En desarrollo: permite archivos locales (origin=undefined/null) y orígenes configurados
-    if (!origin && isDev) return cb(null, true);          // archivo file:///
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // Sin origen = mismo servidor (HTML servido por Express) o archivo local en dev
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    // En desarrollo permite cualquier localhost
+    if (isDev && (origin.includes('localhost') || origin.includes('127.0.0.1'))) return cb(null, true);
     cb(new Error(`CORS: origen ${origin} no permitido`));
   },
   methods:     ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -56,10 +73,29 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
   stream: { write: msg => logger.http(msg.trim()) },
 }));
 
-/* ── Health check ─────────────────────────────────────────── */
-app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
+/* ── Archivos estáticos (sitio + backoffice) ──────────────── */
+const path      = require('path');
+const publicDir = path.join(process.cwd(), 'public');  // process.cwd() = raíz del proyecto en Railway
 
-/* ── Rutas ────────────────────────────────────────────────── */
+// Log para verificar la ruta en producción
+const logger2 = require('./config/logger');
+const fs = require('fs');
+logger2.info(`Directorio public: ${publicDir}`);
+logger2.info(`Archivos en public: ${fs.existsSync(publicDir) ? fs.readdirSync(publicDir).join(', ') : 'CARPETA NO ENCONTRADA'}`);
+
+app.use(express.static(publicDir));
+
+/* ── Favicon (evita 404 en el log) ───────────────────────── */
+app.get('/favicon.ico', (_req, res) => res.status(204).end());
+
+/* ── Health check ─────────────────────────────────────────── */
+app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime(), publicDir, exists: fs.existsSync(publicDir) }));
+
+/* ── Rutas HTML (sitio y backoffice) ──────────────────────── */
+app.get('/',           (_req, res) => res.sendFile(path.join(publicDir, 'index.html')));
+app.get('/backoffice', (_req, res) => res.sendFile(path.join(publicDir, 'backoffice.html')));
+
+/* ── Rutas API ────────────────────────────────────────────── */
 app.use(`${PREFIX}/auth`,        require('./routes/auth'));
 app.use(`${PREFIX}/simulador`,   require('./routes/simulador'));
 app.use(`${PREFIX}/empresas`,    require('./routes/empresas'));
