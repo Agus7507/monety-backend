@@ -11,14 +11,7 @@ const app    = express();
 const PREFIX = process.env.API_PREFIX || '/api/v1';
 
 /* ── Seguridad ────────────────────────────────────────────── Se pone en lo que se corren las pruebas*/
-app.use(helmet.contentSecurityPolicy({
-    directives: {
-      defaultSrc: ['self'],
-      scriptSrc: ['self', 'unsafe-inline'], // ⚠️
-      scriptSrcAttr: ['unsafe-inline'],       // ⚠️
-    },
-  })
-);
+app.use(helmet());
 
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
   .split(',').map(o => o.trim());
