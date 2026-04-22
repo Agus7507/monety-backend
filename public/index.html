@@ -1218,7 +1218,8 @@
     document.getElementById('page' + step).classList.add('active');
     updateStepUI();
     if (step === 4) buildSummary();
-    document.getElementById('solicitar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Scroll al inicio del form, no de la sección completa
+    document.getElementById('page' + step).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function goToStep(step) {
@@ -1272,22 +1273,24 @@
   async function loadEmpresas() {
     try {
       const res  = await fetch(`${API_BASE}/empresas`);
+      if (!res.ok) return;   // BD no lista aún — usa opciones hardcodeadas
       const data = await res.json();
-      if (data.ok && data.empresas.length) {
+      if (data.ok && data.empresas && data.empresas.length) {
         empresaMap = {};
         const sel = document.getElementById('empresa');
         sel.innerHTML = '<option value="">Selecciona tu empresa...</option>';
         data.empresas.forEach(e => {
           empresaMap[e.nombre] = e.id;
           const opt = document.createElement('option');
-          opt.value = e.id;          // el value ya es el ID
+          opt.value = e.id;
           opt.textContent = e.nombre;
           sel.appendChild(opt);
         });
       }
-    } catch {
-      // Si el backend no responde usa los valores hardcodeados (modo offline)
+    } catch (_e) {
+      // Silencioso — el formulario funciona con valores hardcodeados
     }
+  }
   }
   loadEmpresas();
 
