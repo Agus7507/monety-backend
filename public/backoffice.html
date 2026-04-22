@@ -871,22 +871,32 @@ async function doLogin() {
   btn.innerHTML = '<span class="loader" style="width:16px;height:16px;border-width:2px"></span>';
 
   try {
-    /* DEMO MODE: Si no hay backend corriendo, usamos datos de demo */
+    /* Intenta login real contra la API */
     let data;
     try {
       data = await apiFetch('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-    } catch {
-      // Modo demo si el backend no está disponible
+    } catch(apiErr) {
+      // Si el servidor respondió con un error (401 credenciales, etc.) lo mostramos directo
+      const esModoOffline = apiErr.message.includes('Failed to fetch')
+        || apiErr.message.includes('NetworkError')
+        || apiErr.message.includes('Load failed');
+
+      if (!esModoOffline) {
+        // Error real de la API (credenciales incorrectas, etc.)
+        throw apiErr;
+      }
+
+      // Sin conexión → modo demo para desarrollo local
       if (email === 'admin@monety.mx' && password === 'demo1234') {
         data = {
           token: 'demo-token-xxx',
           user: { id: '1', nombre: 'Admin Demo', email, rol: 'ADMIN' },
         };
       } else {
-        throw new Error('Credenciales incorrectas (modo demo: admin@monety.mx / demo1234)');
+        throw new Error('Sin conexión al servidor. Para modo demo usa: admin@monety.mx / demo1234');
       }
     }
 
