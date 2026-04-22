@@ -10,7 +10,7 @@ const { globalErrorHandler } = require('./middleware/errorHandler');
 const app    = express();
 const PREFIX = process.env.API_PREFIX || '/api/v1';
 
-/* ── Seguridad ────────────────────────────────────────────── */
+/* ── Seguridad ────────────────────────────────────────────── Se pone en lo que se corren las pruebas*/
 app.use(helmet());
 
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
