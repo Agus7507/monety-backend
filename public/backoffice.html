@@ -775,6 +775,15 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
         <div class="detail-folio" id="dFolio">MNT-000001</div>
         <div style="font-size:12px;color:var(--text-2);margin-top:3px" id="dFecha"></div>
       </div>
+      <!-- Botones de documentos (solo visibles cuando la solicitud está aprobada) -->
+      <div id="docBtns" style="display:none;gap:8px;align-items:center;">
+        <button id="btnCarta" class="btn-sm ghost" onclick="abrirDocumento('carta')" title="Carta de Aprobación">
+          📄 Carta
+        </button>
+        <button id="btnContrato" class="btn-sm ghost" onclick="abrirDocumento('contrato')" title="Contrato de Mutuo">
+          📋 Contrato
+        </button>
+      </div>
       <button class="btn-close" onclick="closeDetail()">×</button>
     </div>
     <div class="detail-body" id="detailBody">
@@ -1255,10 +1264,14 @@ async function loadEmpresas() {
 /* ══════════════════════════════════════════════════════════
    DETAIL PANEL
 ══════════════════════════════════════════════════════════ */
+// ID de la solicitud actual en el panel de detalle
+let currentSolId = null;
+
 function openDetail(folio) {
   $('detailOverlay').classList.add('open');
   $('dFolio').textContent = folio;
   $('detailBody').innerHTML = '<div class="empty-state"><div class="loader"></div></div>';
+  $('docBtns').style.display = 'none';
   loadDetailData(folio);
 }
 
@@ -1274,51 +1287,65 @@ async function loadDetailData(folio) {
     sol = d.solicitud;
   } catch {
     sol = DEMO_SOLIS.find(s => s.folio === folio) || DEMO_SOLIS[0];
-    sol = {
-      ...sol,
-      puntaje_total: sol.puntaje_total || 95,
+    sol = { ...sol, puntaje_total: 95,
       puntos_ingreso: 40, puntos_historial: 30,
-      puntos_antiguedad: 20, puntos_capacidad_pago: 20,
-    };
+      puntos_antiguedad: 20, puntos_capacidad_pago: 20 };
   }
 
   $('dFecha').textContent = `Solicitud del ${fmtDate(sol.fecha_solicitud)}`;
 
+  // Guardar UUID para documentos y cambio de estado
+  const solUUID = sol.id || folio;
+  currentSolId  = solUUID;
+
+  // Mostrar botones de documentos solo si está aprobada
+  const estaAprobada = ['PRE_APROBADA', 'APROBADA'].includes(sol.estado);
+  $('docBtns').style.display = estaAprobada ? 'flex' : 'none';
+
   const maxScore = 140;
   const pts = {
-    'Ingreso':         sol.puntos_ingreso        || 40,
-    'Historial':       sol.puntos_historial       || 30,
-    'Antigüedad':      sol.puntos_antiguedad      || 20,
-    'Cap. de pago':    sol.puntos_capacidad_pago  || 20,
+    'Ingreso':      sol.puntos_ingreso      || 0,
+    'Historial':    sol.puntos_historial     || 0,
+    'Antigüedad':   sol.puntos_antiguedad    || 0,
+    'Cap. de pago': sol.puntos_capacidad_pago|| 0,
   };
-  const total = sol.puntaje_total || Object.values(pts).reduce((a,b)=>a+b,0);
-  const pctTotal = (total/maxScore*100).toFixed(0);
+  const total    = sol.puntaje_total || Object.values(pts).reduce((a,b)=>a+b,0);
   const aprobado = total >= 80;
 
-  // Generar tabla de amortización demo
-  const monto = sol.monto_solicitado || 15000;
-  const plazo = sol.plazo_meses || 12;
-  const tasa  = 0.043 * 1.16;
-  const pago  = monto * (tasa * Math.pow(1+tasa,plazo)) / (Math.pow(1+tasa,plazo)-1);
-  let saldo   = monto;
+  // Tabla de amortización
+  const monto = parseFloat(sol.monto_solicitado) || 15000;
+  const plazo = parseInt(sol.plazo_meses)        || 12;
+  const tasaMes = sol.tipo_credito === 'PERSONAL' ? 0.05 : 0.043;
+  const tasa    = tasaMes * 1.16;
+  const pago    = monto * (tasa * Math.pow(1+tasa,plazo)) / (Math.pow(1+tasa,plazo)-1);
+  let saldo = monto;
   const amort = Array.from({length: plazo}, (_, i) => {
-    const int = saldo * 0.043;
+    const int = saldo * tasaMes;
     const iva = int * 0.16;
     const cap = pago - int - iva;
-    saldo    -= cap;
+    saldo -= cap;
     return { periodo: i+1, capital: cap, interes: int, iva, pago, saldo: Math.max(0,saldo) };
   });
 
+  // Valores mostrados (reales o calculados)
+  const salarioNeto = parseFloat(sol.salario_mensual_neto) || 0;
+  const antiguedad  = sol.antiguedad_anos ? Number(sol.antiguedad_anos).toFixed(1)+' años' : '—';
+  const historial   = sol.historial_crediticio || '—';
+  const empresa     = sol.empresa_nombre || sol.empresa || '—';
+  const email       = sol.email || '—';
+  const telefono    = sol.telefono || '—';
+
   $('detailBody').innerHTML = `
-    <!-- Info section -->
     <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Solicitante</div>
     <div class="info-grid">
-      <div class="info-item"><div class="info-label">Nombre</div><div class="info-value">${sol.nombre || sol.nombres || '—'}</div></div>
-      <div class="info-item"><div class="info-label">Email</div><div class="info-value" style="font-size:13px">${sol.email||'—'}</div></div>
-      <div class="info-item"><div class="info-label">Empresa</div><div class="info-value">${sol.empresa_nombre||sol.empresa||'—'}</div></div>
-      <div class="info-item"><div class="info-label">Antigüedad</div><div class="info-value">${sol.antiguedad_anos ? Number(sol.antiguedad_anos).toFixed(1)+' años' : '—'}</div></div>
-      <div class="info-item"><div class="info-label">Salario neto</div><div class="info-value" style="color:var(--green)">${fmtMXN(sol.salario_mensual_neto||sol.salarioNeto)}</div></div>
-      <div class="info-item"><div class="info-label">Historial</div><div class="info-value">${sol.historial_crediticio||'—'}</div></div>
+      <div class="info-item"><div class="info-label">Nombre</div><div class="info-value">${sol.nombre || '—'}</div></div>
+      <div class="info-item"><div class="info-label">Email</div><div class="info-value" style="font-size:13px">${email}</div></div>
+      <div class="info-item"><div class="info-label">Teléfono</div><div class="info-value">${telefono}</div></div>
+      <div class="info-item"><div class="info-label">Empresa</div><div class="info-value">${empresa}</div></div>
+      <div class="info-item"><div class="info-label">Antigüedad</div><div class="info-value">${antiguedad}</div></div>
+      <div class="info-item"><div class="info-label">Historial crediticio</div><div class="info-value">${historial}</div></div>
+      <div class="info-item"><div class="info-label">Salario neto</div><div class="info-value" style="color:var(--green)">${fmtMXN(salarioNeto)}</div></div>
+      <div class="info-item"><div class="info-label">Gastos mensuales</div><div class="info-value">${fmtMXN(sol.gastos_personales||0)}</div></div>
     </div>
 
     <div class="divider"></div>
@@ -1328,20 +1355,18 @@ async function loadDetailData(folio) {
       <div class="info-item"><div class="info-label">Plazo</div><div class="info-value big">${plazo} meses</div></div>
       <div class="info-item"><div class="info-label">Pago estimado</div><div class="info-value" style="color:var(--teal);font-weight:700">${fmtMXN(pago)} / mes</div></div>
       <div class="info-item"><div class="info-label">Total a pagar</div><div class="info-value">${fmtMXN(pago*plazo)}</div></div>
-      <div class="info-item"><div class="info-label">Tipo</div><div class="info-value">${sol.tipo_credito||'NOMINA'}</div></div>
+      <div class="info-item"><div class="info-label">Tipo</div><div class="info-value">${sol.tipo_credito||'—'}</div></div>
       <div class="info-item"><div class="info-label">Estado</div><div class="info-value">${estadoBadge(sol.estado)}</div></div>
     </div>
 
     <div class="divider"></div>
-
-    <!-- Score -->
     <div class="score-section">
       <div class="score-title">Evaluación crediticia</div>
       ${Object.entries(pts).map(([k,v]) => {
         const maxPts = k==='Ingreso'?50:k==='Historial'?40:30;
         return `<div class="score-row">
           <span class="score-name">${k}</span>
-          <div class="score-bar-track"><div class="score-bar-fill" style="width:${(v/maxPts*100).toFixed(0)}%"></div></div>
+          <div class="score-bar-track"><div class="score-bar-fill" style="width:${maxPts>0?(v/maxPts*100).toFixed(0):0}%"></div></div>
           <span class="score-pts">${v}/${maxPts}</span>
         </div>`;
       }).join('')}
@@ -1358,20 +1383,16 @@ async function loadDetailData(folio) {
     </div>
 
     <div class="divider"></div>
-
-    <!-- Cambiar estado -->
     <div style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Cambiar estado</div>
     <div class="estado-selector">
       ${['EN_REVISION','PRE_APROBADA','APROBADA','RECHAZADA','CANCELADA'].map(e => `
-        <button class="estado-btn${sol.estado===e?' selected':''}" onclick="cambiarEstado('${sol.id||folio}','${e}',this)">${ESTADO_LABELS[e]?.[1]||e}</button>
+        <button class="estado-btn${sol.estado===e?' selected':''}" onclick="cambiarEstado('${solUUID}','${e}',this)">${ESTADO_LABELS[e]?.[1]||e}</button>
       `).join('')}
     </div>
     <textarea id="comentarioEstado" placeholder="Comentario (opcional)..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-raised);border:1.5px solid var(--border);color:var(--text-1);font-size:13px;resize:vertical;min-height:70px;margin-bottom:12px"></textarea>
-    <button class="btn-sm primary" onclick="guardarEstado('${sol.id||folio}')">Guardar cambio</button>
+    <button class="btn-sm primary" onclick="guardarEstado('${solUUID}')">Guardar cambio</button>
 
     <div class="divider"></div>
-
-    <!-- Amortización -->
     <div style="margin-bottom:12px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Tabla de amortización</div>
     <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">
       <table class="amort-table">
@@ -1403,20 +1424,62 @@ function cambiarEstado(id, estado, btn) {
 }
 
 async function guardarEstado(id) {
-  if (!selectedEstado) { toast('Selecciona un estado primero','info'); return; }
-  const comentario = $('comentarioEstado').value;
+  if (!selectedEstado) { toast('Selecciona un estado primero', 'info'); return; }
+  const comentario = $('comentarioEstado')?.value || '';
+  const btn = document.querySelector('.detail-body .btn-sm.primary') ||
+              document.querySelector('[onclick^="guardarEstado"]');
+
   try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
     await apiFetch(`/solicitudes/${id}/estado`, {
       method: 'PATCH',
       body: JSON.stringify({ estado: selectedEstado, comentario }),
     });
-    toast(`Estado actualizado: ${ESTADO_LABELS[selectedEstado]?.[1] || selectedEstado}`, 'success');
-  } catch {
-    // demo mode
-    toast(`Estado actualizado (demo): ${ESTADO_LABELS[selectedEstado]?.[1] || selectedEstado}`, 'success');
+
+    toast(`✅ Estado actualizado: ${ESTADO_LABELS[selectedEstado]?.[1] || selectedEstado}`, 'success');
+    closeDetail();
+    // Recargar lista y dashboard
+    loadSolicitudes();
+    if (document.getElementById('page-dashboard').classList.contains('active')) loadDashboard();
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambio'; }
   }
-  closeDetail();
-  loadSolicitudes();
+}
+
+/* ══════════════════════════════════════════════════════════
+   GENERADOR DE DOCUMENTOS
+══════════════════════════════════════════════════════════ */
+function abrirDocumento(tipo) {
+  if (!currentSolId || currentSolId.startsWith('MNT-')) {
+    toast('No se puede generar el documento: ID de solicitud no disponible.', 'error');
+    return;
+  }
+
+  // Construye la URL con el token de autenticación embebido en query param
+  // El backend usa el header Authorization, así que abrimos en nueva pestaña
+  // y pasamos el token para autenticarse (solo funciona si el browser lo soporta)
+  const base = API.replace('/api/v1', '');
+  const url  = `${API}/documentos/${currentSolId}/${tipo}`;
+
+  // Fetch la URL con auth y abre en nueva ventana via Blob
+  fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+    .then(r => {
+      if (!r.ok) throw new Error('No se pudo generar el documento');
+      return r.text();
+    })
+    .then(html => {
+      const win = window.open('', '_blank');
+      if (!win) {
+        toast('Permite las ventanas emergentes para ver el documento', 'error');
+        return;
+      }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    })
+    .catch(err => toast(`Error: ${err.message}`, 'error'));
 }
 
 /* ══════════════════════════════════════════════════════════
