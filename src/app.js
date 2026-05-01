@@ -102,6 +102,7 @@ app.use(`${PREFIX}/empresas`,    require('./routes/empresas'));
 app.use(`${PREFIX}/solicitudes`, limiterSolicitud, require('./routes/solicitudes'));
 app.use(`${PREFIX}/creditos`,    require('./routes/creditos'));
 app.use(`${PREFIX}/dashboard`,   require('./routes/dashboard'));
+app.use(`${PREFIX}/documentos`,  require('./routes/documentos'));
 
 /* ── 404 ──────────────────────────────────────────────────── */
 app.use((_req, res) => {
