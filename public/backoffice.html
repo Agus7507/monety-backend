@@ -1069,7 +1069,7 @@ async function loadDashboard() {
 
   // Tabla recientes
   $('tbRecientes').innerHTML = dash.recientes.map(s => `
-    <tr onclick="openDetail('${s.folio || s.id}')">
+    <tr onclick="openDetail('${s.id || s.folio}', '${s.folio}')">
       <td class="td-mono">${s.folio}</td>
       <td>${s.nombre || s.acreditado || '—'}</td>
       <td>${s.empresa || '—'}</td>
@@ -1120,7 +1120,7 @@ function renderSolicitudes() {
   const page    = filtered.slice(start, start + PAGE_SIZE);
 
   $('tbSolicitudes').innerHTML = page.map(s => `
-    <tr onclick="openDetail('${s.folio}')">
+    <tr onclick="openDetail('${s.id}', '${s.folio}')">
       <td class="td-mono" style="color:var(--teal)">${s.folio}</td>
       <td><div style="font-weight:500">${s.nombre || '—'}</div><div style="font-size:11px;color:var(--text-2)">${s.email||''}</div></td>
       <td>${s.empresa || '—'}</td>
@@ -1264,15 +1264,18 @@ async function loadEmpresas() {
 /* ══════════════════════════════════════════════════════════
    DETAIL PANEL
 ══════════════════════════════════════════════════════════ */
-// ID de la solicitud actual en el panel de detalle
 let currentSolId = null;
 
-function openDetail(folio) {
+function openDetail(id, folio) {
+  // id = UUID cuando viene de la tabla, folio = MNT-XXXXXX siempre
+  const esUUID = id && !String(id).startsWith('MNT-');
+  currentSolId = esUUID ? id : null;
+
   $('detailOverlay').classList.add('open');
-  $('dFolio').textContent = folio;
+  $('dFolio').textContent = folio || id;
   $('detailBody').innerHTML = '<div class="empty-state"><div class="loader"></div></div>';
   $('docBtns').style.display = 'none';
-  loadDetailData(folio);
+  loadDetailData(id, folio);
 }
 
 function closeDetail(e) {
@@ -1280,27 +1283,39 @@ function closeDetail(e) {
   $('detailOverlay').classList.remove('open');
 }
 
-async function loadDetailData(folio) {
+async function loadDetailData(id, folio) {
   let sol;
+  const esUUID = id && !String(id).startsWith('MNT-');
+
   try {
-    const d = await apiFetch(`/solicitudes/estado/${folio}`);
-    sol = d.solicitud;
+    // Si tenemos UUID, usamos el endpoint autenticado que devuelve todos los datos
+    if (esUUID) {
+      const d = await apiFetch(`/solicitudes/${id}`);
+      sol = d.solicitud;
+    } else {
+      // Fallback al endpoint público si solo tenemos folio
+      const d = await apiFetch(`/solicitudes/estado/${folio || id}`);
+      sol = d.solicitud;
+    }
   } catch {
-    sol = DEMO_SOLIS.find(s => s.folio === folio) || DEMO_SOLIS[0];
+    // Demo fallback
+    const demoKey = folio || id;
+    sol = DEMO_SOLIS.find(s => s.folio === demoKey || s.id === id) || DEMO_SOLIS[0];
     sol = { ...sol, puntaje_total: 95,
       puntos_ingreso: 40, puntos_historial: 30,
       puntos_antiguedad: 20, puntos_capacidad_pago: 20 };
   }
 
+  // Siempre asegurar UUID desde la respuesta
+  if (sol?.id && !String(sol.id).startsWith('MNT-')) {
+    currentSolId = sol.id;
+  }
+
   $('dFecha').textContent = `Solicitud del ${fmtDate(sol.fecha_solicitud)}`;
 
-  // Guardar UUID para documentos y cambio de estado
-  const solUUID = sol.id || folio;
-  currentSolId  = solUUID;
-
-  // Mostrar botones de documentos solo si está aprobada
+  // Mostrar botones de documentos solo si está aprobada Y tenemos UUID
   const estaAprobada = ['PRE_APROBADA', 'APROBADA'].includes(sol.estado);
-  $('docBtns').style.display = estaAprobada ? 'flex' : 'none';
+  $('docBtns').style.display = (estaAprobada && currentSolId) ? 'flex' : 'none';
 
   const maxScore = 140;
   const pts = {
@@ -1386,11 +1401,11 @@ async function loadDetailData(folio) {
     <div style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Cambiar estado</div>
     <div class="estado-selector">
       ${['EN_REVISION','PRE_APROBADA','APROBADA','RECHAZADA','CANCELADA'].map(e => `
-        <button class="estado-btn${sol.estado===e?' selected':''}" onclick="cambiarEstado('${solUUID}','${e}',this)">${ESTADO_LABELS[e]?.[1]||e}</button>
+        <button class="estado-btn${sol.estado===e?' selected':''}" onclick="cambiarEstado('${currentSolId}','${e}',this)">${ESTADO_LABELS[e]?.[1]||e}</button>
       `).join('')}
     </div>
     <textarea id="comentarioEstado" placeholder="Comentario (opcional)..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-raised);border:1.5px solid var(--border);color:var(--text-1);font-size:13px;resize:vertical;min-height:70px;margin-bottom:12px"></textarea>
-    <button class="btn-sm primary" onclick="guardarEstado('${solUUID}')">Guardar cambio</button>
+    <button class="btn-sm primary" onclick="guardarEstado('${currentSolId}')">Guardar cambio</button>
 
     <div class="divider"></div>
     <div style="margin-bottom:12px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Tabla de amortización</div>

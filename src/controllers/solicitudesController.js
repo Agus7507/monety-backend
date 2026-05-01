@@ -153,21 +153,38 @@ async function crear(req, res, next) {
 
 /* ─────────────────────────────────────────────────────────────
    CONSULTAR ESTADO  (GET /api/v1/solicitudes/estado/:folio)
+   Devuelve datos completos para el panel de detalle del backoffice.
    ───────────────────────────────────────────────────────────── */
 async function consultarEstado(req, res, next) {
   try {
     const { folio } = req.params;
     const { rows } = await db(
       `SELECT
+         s.id,
          s.folio, s.estado, s.fecha_solicitud,
          s.monto_solicitado, s.plazo_meses, s.tipo_credito,
-         CONCAT(p.nombres,' ',p.apellido_pat) AS nombre,
-         e.nombre AS empresa,
-         ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo
+         s.salario_mensual_neto, s.salario_mensual_bruto,
+         s.historial_crediticio,
+         s.antiguedad_anos,
+         s.gastos_personales, s.tiene_deudas,
+         s.pago_mensual_deudas, s.tiene_infonavit,
+         -- Solicitante
+         p.nombres, p.apellido_pat, p.apellido_mat,
+         p.email, p.telefono, p.curp,
+         p.entidad, p.alcaldia_mpio,
+         CONCAT(p.nombres,' ',p.apellido_pat,' ',COALESCE(p.apellido_mat,'')) AS nombre,
+         -- Empresa (LEFT JOIN por si empresa_id no existe aún)
+         e.id AS empresa_id_val,
+         COALESCE(e.nombre, 'Sin empresa') AS empresa_nombre,
+         -- Evaluación
+         ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
+         ev.puntos_ingreso, ev.puntos_historial,
+         ev.puntos_antiguedad, ev.puntos_capacidad_pago,
+         ev.capacidad_de_pago, ev.ratio_capacidad_pago
        FROM solicitudes s
-       JOIN solicitantes p  ON p.id = s.solicitante_id
-       JOIN empresas e      ON e.id = s.empresa_id
-       LEFT JOIN evaluaciones ev ON ev.solicitud_id = s.id
+       JOIN solicitantes p        ON p.id = s.solicitante_id
+       LEFT JOIN empresas e       ON e.id = s.empresa_id
+       LEFT JOIN evaluaciones ev  ON ev.solicitud_id = s.id
        WHERE s.folio = $1`,
       [folio.toUpperCase()]
     );
@@ -208,16 +225,17 @@ async function listar(req, res, next) {
     params.push(limit, offset);
     const { rows } = await db(
       `SELECT
-         s.folio, s.estado, s.fecha_solicitud, s.tipo_credito,
+         s.id, s.folio, s.estado, s.fecha_solicitud, s.tipo_credito,
          s.monto_solicitado, s.plazo_meses,
+         s.salario_mensual_neto, s.historial_crediticio, s.antiguedad_anos,
          CONCAT(p.nombres,' ',p.apellido_pat) AS nombre,
          p.email, p.telefono,
-         e.nombre AS empresa,
+         COALESCE(e.nombre, 'Sin empresa') AS empresa,
          ev.ranking, ev.puntaje_total, ev.resultado
        FROM solicitudes s
-       JOIN solicitantes p  ON p.id = s.solicitante_id
-       JOIN empresas e      ON e.id = s.empresa_id
-       LEFT JOIN evaluaciones ev ON ev.solicitud_id = s.id
+       JOIN solicitantes p         ON p.id = s.solicitante_id
+       LEFT JOIN empresas e        ON e.id = s.empresa_id
+       LEFT JOIN evaluaciones ev   ON ev.solicitud_id = s.id
        ${where}
        ORDER BY s.created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -228,7 +246,7 @@ async function listar(req, res, next) {
     const countParams = params.slice(0, -2);
     const { rows: cnt } = await db(
       `SELECT COUNT(*) FROM solicitudes s
-       JOIN empresas e ON e.id = s.empresa_id ${where}`,
+       LEFT JOIN empresas e ON e.id = s.empresa_id ${where}`,
       countParams
     );
 
@@ -247,15 +265,37 @@ async function obtener(req, res, next) {
   try {
     const { id } = req.params;
     const { rows } = await db(
-      `SELECT s.*, p.*, e.nombre AS empresa_nombre,
-              ev.*, c.id AS credito_id, c.monto_aprobado,
-              c.tasa_nominal_anual, c.cat_anual, c.pago_mensual_total,
-              c.fecha_desembolso, c.saldo_insoluto, c.estado AS estado_credito
+      `SELECT
+         s.id, s.folio, s.estado, s.fecha_solicitud,
+         s.tipo_credito, s.tipo_nomina,
+         s.monto_solicitado, s.plazo_meses,
+         s.salario_mensual_bruto, s.salario_mensual_neto,
+         s.historial_crediticio, s.antiguedad_anos,
+         s.gastos_personales, s.tiene_deudas,
+         s.pago_mensual_deudas, s.tiene_infonavit,
+         -- Solicitante
+         p.nombres, p.apellido_pat, p.apellido_mat,
+         p.email, p.telefono, p.curp, p.rfc,
+         p.calle, p.colonia, p.alcaldia_mpio, p.entidad, p.cp,
+         TRIM(CONCAT(p.nombres,' ',p.apellido_pat,' ',COALESCE(p.apellido_mat,''))) AS nombre,
+         -- Empresa
+         COALESCE(e.nombre,'Sin empresa') AS empresa_nombre,
+         -- Evaluación
+         ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
+         ev.puntos_ingreso, ev.puntos_historial,
+         ev.puntos_antiguedad, ev.puntos_capacidad_pago,
+         ev.capacidad_de_pago, ev.ratio_capacidad_pago,
+         ev.meses_credito_vs_salario,
+         -- Crédito formalizado
+         c.id AS credito_id, c.monto_aprobado,
+         c.tasa_nominal_anual, c.cat_anual,
+         c.pago_mensual_total, c.fecha_desembolso,
+         c.fecha_vencimiento, c.saldo_insoluto, c.estado AS estado_credito
        FROM solicitudes s
-       JOIN solicitantes p  ON p.id = s.solicitante_id
-       JOIN empresas e      ON e.id = s.empresa_id
-       LEFT JOIN evaluaciones ev ON ev.solicitud_id = s.id
-       LEFT JOIN creditos c      ON c.solicitud_id  = s.id
+       JOIN solicitantes p        ON p.id = s.solicitante_id
+       LEFT JOIN empresas e       ON e.id = s.empresa_id
+       LEFT JOIN evaluaciones ev  ON ev.solicitud_id = s.id
+       LEFT JOIN creditos c       ON c.solicitud_id  = s.id
        WHERE s.id = $1`,
       [id]
     );
@@ -271,7 +311,7 @@ async function obtener(req, res, next) {
       [id]
     );
 
-    // Documentos
+    // Documentos adjuntos
     const { rows: docs } = await db(
       `SELECT tipo, nombre_archivo, verificado, created_at
        FROM documentos WHERE solicitud_id=$1`,
