@@ -470,6 +470,20 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
 .page-btn.active { background: var(--teal); border-color: var(--teal); color: #fff; }
 .page-info { font-size: 12px; color: var(--text-2); margin-right: auto; }
 
+/* ── PLAZO BUTTONS (simulador) ───────────────────────────── */
+.plazo-btn {
+  padding: 7px 10px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+  background: var(--bg-raised); border: 1.5px solid var(--border); color: var(--text-2);
+  cursor: pointer; transition: all .15s; font-family: var(--font-main);
+}
+.plazo-btn:hover { border-color: var(--teal); color: var(--teal); }
+.plazo-btn.active { background: var(--teal-dim); border-color: var(--teal); color: var(--teal); font-weight: 700; }
+
+/* ── LAYOUT TABLE ────────────────────────────────────────── */
+.layout-paid td { opacity: .45; text-decoration: line-through; }
+.layout-badge-paid { background: rgba(63,185,80,.15); color: var(--green); padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.layout-badge-pend { background: rgba(210,153,34,.12); color: var(--amber); padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+
 /* ── RESPONSIVE ──────────────────────────────────────────── */
 @media (max-width: 900px) {
   :root { --sidebar-w: 200px; }
@@ -534,6 +548,16 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
         </button>
         <button class="nav-item" data-page="cartera" onclick="navigate('cartera',this)">
           <span class="nav-icon">◈</span> Cartera
+        </button>
+        <button class="nav-item" data-page="layouts" onclick="navigate('layouts',this)">
+          <span class="nav-icon">🗂</span> Layouts Nómina
+        </button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-label">Herramientas</div>
+        <button class="nav-item" data-page="simulador_anl" onclick="navigate('simulador_anl',this)">
+          <span class="nav-icon">🧮</span> Simulador
         </button>
       </div>
 
@@ -763,6 +787,249 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
         </div>
       </div>
 
+      <!-- ── LAYOUTS NÓMINA ──────────────────────────────────── -->
+      <div class="page" id="page-layouts">
+        <div class="topbar">
+          <div>
+            <div class="topbar-title">Layouts de Nómina</div>
+            <div class="topbar-sub">Avisos de descuento y confirmación de recuperación</div>
+          </div>
+          <div class="topbar-actions">
+            <button class="btn-sm ghost" onclick="loadLayouts()">↻ Actualizar</button>
+          </div>
+        </div>
+        <div class="page-body">
+
+          <!-- Filtros -->
+          <div class="section-card" style="margin-bottom:16px;">
+            <div style="padding:16px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+              <div>
+                <div style="font-size:11px;color:var(--text-2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Empresa</div>
+                <select class="filter-select" id="layoutEmpresa" style="min-width:160px" onchange="renderLayouts()">
+                  <option value="">Todas</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Año</div>
+                <select class="filter-select" id="layoutAnio" onchange="renderLayouts()">
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Tipo</div>
+                <select class="filter-select" id="layoutTipo" onchange="renderLayouts()">
+                  <option value="descuento">Aviso de descuento</option>
+                  <option value="recuperacion">Confirmación de pago</option>
+                </select>
+              </div>
+              <div style="margin-left:auto;display:flex;gap:10px;">
+                <button class="btn-sm primary" onclick="generarLayoutHTML()">⬇ Exportar Layout</button>
+                <button class="btn-sm ghost" onclick="marcarPeriodoPagado()">✓ Marcar periodo pagado</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Info cards -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;" id="layoutKpis"></div>
+
+          <!-- Tabla principal -->
+          <div class="section-card">
+            <div class="section-header">
+              <div>
+                <div class="section-title" id="layoutTableTitle">Aviso de descuento — Periodo actual</div>
+                <div class="section-sub" id="layoutTableSub"></div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <div style="font-size:12px;color:var(--text-2)">Periodo:</div>
+                <select class="filter-select" id="layoutPeriodo" style="width:130px" onchange="renderLayouts()"></select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead id="layoutThead"></thead>
+                <tbody id="tbLayouts"></tbody>
+                <tfoot id="layoutTfoot"></tfoot>
+              </table>
+            </div>
+          </div>
+
+          <!-- Aviso recuperación -->
+          <div class="section-card" style="margin-top:16px;" id="layoutRecuperacionCard">
+            <div class="section-header">
+              <div>
+                <div class="section-title">Historial de pagos recibidos</div>
+                <div class="section-sub">Periodos marcados como pagados</div>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr>
+                  <th>Empresa</th><th>Crédito</th><th>Empleado</th><th>RFC</th>
+                  <th>Tipo</th><th>No. Descuento</th><th>Importe</th><th>Fecha confirmación</th><th>Estado</th>
+                </tr></thead>
+                <tbody id="tbHistorialPagos"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── SIMULADOR ANALISTA ──────────────────────────────── -->
+      <div class="page" id="page-simulador_anl">
+        <div class="topbar">
+          <div>
+            <div class="topbar-title">Simulador de Crédito</div>
+            <div class="topbar-sub">Herramienta para proponer condiciones personalizadas al cliente</div>
+          </div>
+        </div>
+        <div class="page-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+            <!-- Panel izquierdo: controles -->
+            <div>
+              <div class="section-card" style="margin-bottom:16px;">
+                <div class="section-header">
+                  <div><div class="section-title">🧮 Parámetros del crédito</div></div>
+                </div>
+                <div style="padding:24px;display:flex;flex-direction:column;gap:20px;">
+
+                  <div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                      <label style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px">Monto</label>
+                      <span style="font-family:var(--font-mono);font-weight:700;color:var(--teal);font-size:18px" id="simMLabel">$15,000</span>
+                    </div>
+                    <input type="range" id="simMonto" min="3000" max="80000" step="1000" value="15000"
+                      oninput="calcSim()" style="width:100%;accent-color:var(--teal);">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-top:4px;">
+                      <span>$3,000</span><span>$80,000</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px;">Plazo</label>
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;" id="plazoGrid">
+                      ${[3,6,9,12,18,24,30,36].map(p=>`<button class="plazo-btn${p===12?' active':''}" onclick="setPlazo(${p})">${p}m</button>`).join('')}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                      <label style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px">Tasa mensual</label>
+                      <span style="font-family:var(--font-mono);font-weight:700;color:var(--amber);font-size:18px" id="simTLabel">4.3%</span>
+                    </div>
+                    <input type="range" id="simTasa" min="1.0" max="8.0" step="0.1" value="4.3"
+                      oninput="calcSim()" style="width:100%;accent-color:var(--amber);">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-top:4px;">
+                      <span>1.0% (Nómina)</span><span>8.0%</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px;">Tipo de nómina</label>
+                    <div style="display:flex;gap:8px;">
+                      <button class="plazo-btn active" id="tipoMens" onclick="setTipoNom('MENSUAL')">Mensual</button>
+                      <button class="plazo-btn" id="tipoQuinc" onclick="setTipoNom('QUINCENAL')">Quincenal</button>
+                      <button class="plazo-btn" id="tipoSem" onclick="setTipoNom('SEMANAL')">Semanal</button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px;">Salario neto del empleado</label>
+                    <input type="number" id="simSalario" placeholder="Ej. 15,000" value="15000" oninput="calcSim()"
+                      style="width:100%;padding:10px 12px;background:var(--bg-raised);border:1.5px solid var(--border);border-radius:8px;color:var(--text-1);font-size:14px;">
+                  </div>
+
+                  <div>
+                    <label style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px;">Folio de solicitud (opcional)</label>
+                    <input type="text" id="simFolioRef" placeholder="MNT-000001"
+                      style="width:100%;padding:10px 12px;background:var(--bg-raised);border:1.5px solid var(--border);border-radius:8px;color:var(--text-1);font-size:14px;font-family:var(--font-mono);">
+                  </div>
+
+                  <div style="display:flex;gap:10px;">
+                    <button class="btn-sm primary" style="flex:1;padding:12px;" onclick="guardarPropuesta()">💾 Guardar propuesta</button>
+                    <button class="btn-sm ghost" onclick="resetSim()">↺ Limpiar</button>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel derecho: resultados -->
+            <div style="display:flex;flex-direction:column;gap:16px;">
+
+              <!-- Resultado principal -->
+              <div class="section-card" style="background:linear-gradient(135deg,#1BA896,#138e7e);">
+                <div style="padding:28px;">
+                  <div style="font-size:12px;color:rgba(255,255,255,.75);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Pago periódico estimado</div>
+                  <div style="font-family:var(--font-mono);font-size:48px;font-weight:800;color:white;" id="simPago">$1,626</div>
+                  <div style="font-size:13px;color:rgba(255,255,255,.75);margin-top:4px;" id="simPagoLabel">por mes · IVA incluido</div>
+                </div>
+              </div>
+
+              <!-- Métricas -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="stat-card" style="padding:16px;">
+                  <div class="stat-label">Tasa nominal anual</div>
+                  <div class="stat-value" style="font-size:22px;margin-top:6px;" id="simTasaAnual">51.6%</div>
+                </div>
+                <div class="stat-card" style="padding:16px;">
+                  <div class="stat-label">CAT estimado</div>
+                  <div class="stat-value" style="font-size:22px;margin-top:6px;" id="simCAT">59.9%</div>
+                </div>
+                <div class="stat-card" style="padding:16px;">
+                  <div class="stat-label">Total intereses + IVA</div>
+                  <div class="stat-value" style="font-size:22px;margin-top:6px;color:var(--amber)" id="simIntereses">$5,512</div>
+                </div>
+                <div class="stat-card" style="padding:16px;">
+                  <div class="stat-label">Total a pagar</div>
+                  <div class="stat-value" style="font-size:22px;margin-top:6px;" id="simTotal">$20,512</div>
+                </div>
+              </div>
+
+              <!-- Semáforo capacidad de pago -->
+              <div class="section-card">
+                <div style="padding:20px;">
+                  <div style="font-size:12px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">Análisis de capacidad de pago</div>
+                  <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+                    <div style="flex:1;background:var(--bg-active);border-radius:4px;height:8px;overflow:hidden;">
+                      <div id="simCapBar" style="height:100%;background:var(--green);border-radius:4px;transition:width .4s,background .4s;width:0%"></div>
+                    </div>
+                    <span id="simRatio" style="font-family:var(--font-mono);font-size:14px;font-weight:600;min-width:40px;text-align:right;">—%</span>
+                  </div>
+                  <div id="simCapMsg" style="font-size:13px;color:var(--text-2);">Ingresa el salario neto para ver el análisis.</div>
+                </div>
+              </div>
+
+              <!-- Mini tabla de amortización -->
+              <div class="section-card">
+                <div class="section-header">
+                  <div><div class="section-title">Tabla de amortización</div><div class="section-sub" id="simAmortSub"></div></div>
+                </div>
+                <div style="overflow-x:auto;max-height:320px;overflow-y:auto;">
+                  <table>
+                    <thead><tr>
+                      <th>#</th><th>Saldo inicial</th><th>Capital</th><th>Interés</th><th>IVA</th><th>Pago</th><th>Saldo final</th>
+                    </tr></thead>
+                    <tbody id="tbSimAmort"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Propuestas guardadas -->
+              <div class="section-card" id="propuestasCard" style="display:none">
+                <div class="section-header"><div><div class="section-title">Propuestas guardadas</div></div>
+                  <button class="btn-sm ghost" onclick="limpiarPropuestas()">🗑 Borrar todas</button>
+                </div>
+                <div id="propuestasList" style="padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
@@ -962,11 +1229,13 @@ function navigate(page, btn) {
   const el = $(`page-${page}`);
   if (el) el.classList.add('active');
 
-  if (page === 'dashboard')   loadDashboard();
-  if (page === 'solicitudes') loadSolicitudes();
-  if (page === 'creditos')    loadCreditos();
-  if (page === 'cartera')     loadCartera();
-  if (page === 'empresas')    loadEmpresas();
+  if (page === 'dashboard')     loadDashboard();
+  if (page === 'solicitudes')   loadSolicitudes();
+  if (page === 'creditos')      loadCreditos();
+  if (page === 'cartera')       loadCartera();
+  if (page === 'empresas')      loadEmpresas();
+  if (page === 'layouts')       loadLayouts();
+  if (page === 'simulador_anl') { calcSim(); renderPropuestas(); }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1495,6 +1764,418 @@ function abrirDocumento(tipo) {
       win.document.close();
     })
     .catch(err => toast(`Error: ${err.message}`, 'error'));
+}
+
+/* ══════════════════════════════════════════════════════════
+   SIMULADOR DE ANALISTA
+══════════════════════════════════════════════════════════ */
+let simPlazo   = 12;
+let simTipoNom = 'MENSUAL';
+
+function setPlazo(p) {
+  simPlazo = p;
+  document.querySelectorAll('.plazo-btn[onclick^="setPlazo"]').forEach(b => {
+    b.classList.toggle('active', b.textContent === `${p}m`);
+  });
+  calcSim();
+}
+
+function setTipoNom(t) {
+  simTipoNom = t;
+  ['MENSUAL','QUINCENAL','SEMANAL'].forEach(x => {
+    const el = $(`tipo${x === 'MENSUAL' ? 'Mens' : x === 'QUINCENAL' ? 'Quinc' : 'Sem'}`);
+    if (el) el.classList.toggle('active', x === t);
+  });
+  calcSim();
+}
+
+function calcSim() {
+  const monto   = parseInt($('simMonto')?.value || 15000);
+  const tasaM   = parseFloat($('simTasa')?.value || 4.3) / 100;
+  const salario = parseFloat($('simSalario')?.value || 0);
+
+  if ($('simMLabel')) $('simMLabel').textContent = '$' + monto.toLocaleString('es-MX');
+  if ($('simTLabel')) $('simTLabel').textContent = (tasaM * 100).toFixed(1) + '%';
+
+  // Calcular pago según tipo de nómina
+  let n, r, periodoLabel;
+  if (simTipoNom === 'QUINCENAL') {
+    n = simPlazo * 2;
+    r = Math.pow(1 + tasaM, 0.5) - 1;
+    periodoLabel = 'por quincena · IVA incluido';
+  } else if (simTipoNom === 'SEMANAL') {
+    n = simPlazo * 4;
+    r = Math.pow(1 + tasaM, 0.25) - 1;
+    periodoLabel = 'por semana · IVA incluido';
+  } else {
+    n = simPlazo;
+    r = tasaM;
+    periodoLabel = 'por mes · IVA incluido';
+  }
+
+  const tasaConIva = r * 1.16;
+  const pago = monto * (tasaConIva * Math.pow(1 + tasaConIva, n)) / (Math.pow(1 + tasaConIva, n) - 1);
+  const totalPagar = pago * n;
+  const totalIntereses = totalPagar - monto;
+  const tasaAnual = tasaM * 12;
+  const cat = tasaAnual * 1.16 * 1.03; // aproximación CAT
+
+  if ($('simPago'))       $('simPago').textContent       = '$' + Math.round(pago).toLocaleString('es-MX');
+  if ($('simPagoLabel'))  $('simPagoLabel').textContent  = periodoLabel;
+  if ($('simTasaAnual'))  $('simTasaAnual').textContent  = (tasaAnual * 100).toFixed(1) + '%';
+  if ($('simCAT'))        $('simCAT').textContent        = (cat * 100).toFixed(1) + '%';
+  if ($('simIntereses'))  $('simIntereses').textContent  = '$' + Math.round(totalIntereses).toLocaleString('es-MX');
+  if ($('simTotal'))      $('simTotal').textContent      = '$' + Math.round(totalPagar).toLocaleString('es-MX');
+  if ($('simAmortSub'))   $('simAmortSub').textContent   = `${n} pagos de $${Math.round(pago).toLocaleString('es-MX')} (${simTipoNom.toLowerCase()})`;
+
+  // Capacidad de pago
+  if (salario > 0) {
+    const ratio = (pago / salario) * 100;
+    const pct   = Math.min(ratio, 100);
+    const color = ratio < 30 ? 'var(--green)' : ratio < 40 ? 'var(--amber)' : 'var(--red)';
+    const msg   = ratio < 30
+      ? `✅ Excelente capacidad de pago — el pago representa el ${ratio.toFixed(1)}% del salario neto`
+      : ratio < 40
+      ? `⚠️ Capacidad de pago aceptable — ${ratio.toFixed(1)}% del salario (cerca del límite de 40%)`
+      : `❌ Capacidad de pago insuficiente — ${ratio.toFixed(1)}% del salario (excede el 40% recomendado)`;
+    if ($('simCapBar'))  { $('simCapBar').style.width = pct + '%'; $('simCapBar').style.background = color; }
+    if ($('simRatio'))   $('simRatio').textContent = ratio.toFixed(0) + '%';
+    if ($('simCapMsg'))  { $('simCapMsg').textContent = msg; $('simCapMsg').style.color = color; }
+  }
+
+  // Tabla de amortización
+  const tbody = $('tbSimAmort');
+  if (!tbody) return;
+  let saldo = monto;
+  let html  = '';
+  for (let i = 1; i <= Math.min(n, 60); i++) {
+    const int = saldo * r;
+    const iva = int * 0.16;
+    const cap = pago - int - iva;
+    saldo    -= cap;
+    html += `<tr>
+      <td class="td-mono" style="color:var(--text-2)">${i}</td>
+      <td>${fmtMXN(saldo + cap)}</td>
+      <td style="color:var(--teal)">${fmtMXN(cap)}</td>
+      <td>${fmtMXN(int)}</td>
+      <td style="color:var(--text-2)">${fmtMXN(iva)}</td>
+      <td style="font-weight:600">${fmtMXN(pago)}</td>
+      <td>${fmtMXN(Math.max(0,saldo))}</td>
+    </tr>`;
+  }
+  if (n > 60) html += `<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:10px">... ${n - 60} periodos más</td></tr>`;
+  tbody.innerHTML = html;
+}
+
+function resetSim() {
+  $('simMonto').value   = 15000;
+  $('simTasa').value    = 4.3;
+  $('simSalario').value = 15000;
+  $('simFolioRef').value= '';
+  simPlazo   = 12;
+  simTipoNom = 'MENSUAL';
+  document.querySelectorAll('.plazo-btn[onclick^="setPlazo"]').forEach(b =>
+    b.classList.toggle('active', b.textContent === '12m'));
+  setTipoNom('MENSUAL');
+  calcSim();
+}
+
+// Propuestas guardadas en localStorage
+function guardarPropuesta() {
+  const monto  = parseInt($('simMonto').value);
+  const tasa   = parseFloat($('simTasa').value);
+  const folio  = $('simFolioRef').value.trim() || 'Sin folio';
+  const pago   = $('simPago')?.textContent;
+  const total  = $('simTotal')?.textContent;
+
+  const props = JSON.parse(localStorage.getItem('mnty_propuestas') || '[]');
+  props.unshift({
+    id:      Date.now(),
+    folio,
+    monto:   '$' + monto.toLocaleString('es-MX'),
+    plazo:   simPlazo + 'm',
+    tasa:    tasa + '% mensual',
+    tipo:    simTipoNom,
+    pago,
+    total,
+    fecha:   new Date().toLocaleDateString('es-MX'),
+  });
+  localStorage.setItem('mnty_propuestas', JSON.stringify(props.slice(0, 20)));
+  renderPropuestas();
+  toast('✅ Propuesta guardada', 'success');
+}
+
+function renderPropuestas() {
+  const props = JSON.parse(localStorage.getItem('mnty_propuestas') || '[]');
+  const card  = $('propuestasCard');
+  if (!card) return;
+  card.style.display = props.length ? 'block' : 'none';
+  const list = $('propuestasList');
+  if (!list) return;
+  list.innerHTML = props.map(p => `
+    <div style="background:var(--bg-raised);border-radius:10px;padding:14px 16px;border:1px solid var(--border);display:flex;align-items:center;gap:14px;">
+      <div style="flex:1;">
+        <div style="font-family:var(--font-mono);color:var(--teal);font-size:13px;font-weight:600;">${p.folio}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:3px;">${p.monto} · ${p.plazo} · ${p.tasa} · ${p.tipo}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-weight:700;color:var(--text-1)">${p.pago}/periodo</div>
+        <div style="font-size:12px;color:var(--text-2)">Total: ${p.total}</div>
+        <div style="font-size:11px;color:var(--text-3)">${p.fecha}</div>
+      </div>
+      <button onclick="borrarPropuesta(${p.id})" style="background:none;color:var(--text-3);font-size:18px;cursor:pointer;padding:4px;" title="Eliminar">×</button>
+    </div>`).join('');
+}
+
+function borrarPropuesta(id) {
+  const props = JSON.parse(localStorage.getItem('mnty_propuestas') || '[]').filter(p => p.id !== id);
+  localStorage.setItem('mnty_propuestas', JSON.stringify(props));
+  renderPropuestas();
+}
+function limpiarPropuestas() { localStorage.removeItem('mnty_propuestas'); renderPropuestas(); }
+
+/* ══════════════════════════════════════════════════════════
+   LAYOUTS DE NÓMINA
+══════════════════════════════════════════════════════════ */
+let layoutData = []; // créditos activos cargados
+
+async function loadLayouts() {
+  // Cargar empresas en el filtro
+  try {
+    const d = await apiFetch('/empresas');
+    const sel = $('layoutEmpresa');
+    if (sel) {
+      sel.innerHTML = '<option value="">Todas</option>';
+      (d.empresas || []).forEach(e => {
+        sel.innerHTML += `<option value="${e.id}">${e.nombre}</option>`;
+      });
+    }
+  } catch (_) {}
+
+  // Llenar selector de periodos (últimos 12 meses)
+  const periodoSel = $('layoutPeriodo');
+  if (periodoSel) {
+    periodoSel.innerHTML = '';
+    const now = new Date();
+    for (let i = 0; i < 13; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val   = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = d.toLocaleDateString('es-MX', { month:'long', year:'numeric' });
+      periodoSel.innerHTML += `<option value="${val}"${i===0?' selected':''}>${label.charAt(0).toUpperCase()+label.slice(1)}</option>`;
+    }
+  }
+
+  // Cargar créditos activos
+  try {
+    const d = await apiFetch('/creditos?estado=ACTIVO&limit=500');
+    layoutData = d.data || [];
+  } catch {
+    layoutData = generarCreditosDemo();
+  }
+
+  renderLayouts();
+}
+
+function generarCreditosDemo() {
+  const empresas = ['BINOMIA','ZINAPZIA','VIVA HEALTHY'];
+  const tipos    = ['MENSUAL','QUINCENAL'];
+  return Array.from({length: 8}, (_, i) => ({
+    folio:          `MNT-${String(i+1).padStart(6,'0')}`,
+    credito_id:     `cred-${i+1}`,
+    acreditado:     ['Juan González','María López','Carlos Hdez','Ana Ramírez','Luis Torres','Sofía Mendoza','Roberto Castro','Elena Ruiz'][i],
+    rfc:            `RFC${String(i+1).padStart(9,'0')}XX`,
+    empresa:        empresas[i % 3],
+    empresa_id:     String((i % 3) + 1),
+    tipo_nomina:    tipos[i % 2],
+    plazo_meses:    [12,18,24,12,6,18,12,24][i],
+    monto_aprobado: [15000,25000,40000,10000,8000,30000,20000,35000][i],
+    pago_mensual_total: [1626,2100,4000,1100,1400,2500,2200,3100][i],
+    periodo_actual: i + 1,
+    periodos_totales: [12,18,24,12,6,18,12,24][i],
+    pagado:         i < 2,
+    fecha_vencimiento: '2027-03-15',
+  }));
+}
+
+function calcPagoQuincenal(pagoMens) {
+  return pagoMens / 2;
+}
+
+function renderLayouts() {
+  const empFiltro  = $('layoutEmpresa')?.value   || '';
+  const periodo    = $('layoutPeriodo')?.value    || '';
+  const tipo       = $('layoutTipo')?.value       || 'descuento';
+  const [anio, mes]= (periodo || '2026-01').split('-').map(Number);
+
+  let data = layoutData;
+  if (empFiltro) data = data.filter(c => String(c.empresa_id) === empFiltro || c.empresa === empFiltro);
+
+  // KPIs
+  const totalCreditos = data.length;
+  const totalImporte  = data.reduce((s, c) => {
+    const pago = c.tipo_nomina === 'QUINCENAL' ? calcPagoQuincenal(c.pago_mensual_total) : c.pago_mensual_total;
+    return s + pago;
+  }, 0);
+  const pagados  = data.filter(c => c.pagado).length;
+  const empresas = [...new Set(data.map(c => c.empresa))].length;
+
+  $('layoutKpis').innerHTML = `
+    <div class="stat-card"><div class="stat-header"><span class="stat-label">Créditos en layout</span><div class="stat-icon teal">◎</div></div><div class="stat-value">${totalCreditos}</div><div class="stat-change">activos</div></div>
+    <div class="stat-card"><div class="stat-header"><span class="stat-label">Total a recuperar</span><div class="stat-icon green">$</div></div><div class="stat-value" style="font-size:20px">${fmtMXN(totalImporte)}</div><div class="stat-change">este periodo</div></div>
+    <div class="stat-card"><div class="stat-header"><span class="stat-label">Confirmados pagados</span><div class="stat-icon teal">✓</div></div><div class="stat-value" style="color:var(--green)">${pagados}</div><div class="stat-change">de ${totalCreditos}</div></div>
+    <div class="stat-card"><div class="stat-header"><span class="stat-label">Empresas</span><div class="stat-icon amber">⬡</div></div><div class="stat-value">${empresas}</div><div class="stat-change">con créditos activos</div></div>
+  `;
+
+  const esDes = tipo === 'descuento';
+
+  // Cabecera de la tabla
+  $('layoutTableTitle').textContent = esDes
+    ? `Aviso a empresa para descuentos — ${new Date(anio, mes-1).toLocaleDateString('es-MX',{month:'long',year:'numeric'})}`
+    : `Aviso de recuperación de pagos — ${new Date(anio, mes-1).toLocaleDateString('es-MX',{month:'long',year:'numeric'})}`;
+  $('layoutTableSub').textContent = `${data.length} créditos · Total: ${fmtMXN(totalImporte)}`;
+
+  $('layoutThead').innerHTML = `<tr>
+    <th><input type="checkbox" onchange="toggleAll(this)" style="accent-color:var(--teal)"></th>
+    <th>Empresa</th><th>Empleado</th><th>RFC</th><th>Tipo</th>
+    <th>ID Crédito</th>
+    ${esDes ? '<th>Descuentos</th>' : '<th>No. Desc.</th>'}
+    <th>Importe</th><th>Estado</th>
+  </tr>`;
+
+  $('tbLayouts').innerHTML = data.map((c, i) => {
+    const pago = c.tipo_nomina === 'QUINCENAL' ? calcPagoQuincenal(c.pago_mensual_total) : c.pago_mensual_total;
+    const numDesc = esDes
+      ? (c.tipo_nomina === 'QUINCENAL' ? c.plazo_meses * 2 : c.plazo_meses)
+      : `${c.periodo_actual}/${c.tipo_nomina === 'QUINCENAL' ? c.plazo_meses * 2 : c.plazo_meses}`;
+    const estadoBadge = c.pagado
+      ? '<span class="layout-badge-paid">Pagado</span>'
+      : '<span class="layout-badge-pend">Pendiente</span>';
+    return `<tr class="${c.pagado ? 'layout-paid' : ''}">
+      <td><input type="checkbox" class="layout-chk" data-idx="${i}" ${c.pagado?'disabled checked':''} style="accent-color:var(--teal)"></td>
+      <td style="font-weight:600">${c.empresa}</td>
+      <td>${c.acreditado}</td>
+      <td class="td-mono" style="font-size:11px">${c.rfc || '—'}</td>
+      <td><span style="background:var(--bg-active);padding:2px 8px;border-radius:4px;font-size:11px">${c.tipo_nomina}</span></td>
+      <td class="td-mono" style="color:var(--teal)">${c.folio}</td>
+      <td style="text-align:center;font-weight:600">${numDesc}</td>
+      <td style="font-weight:700;color:${c.pagado?'var(--text-3)':'var(--text-1)'}">${fmtMXN(pago)}</td>
+      <td>${estadoBadge}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:30px">Sin créditos para este filtro</td></tr>';
+
+  // Totales
+  $('layoutTfoot').innerHTML = `<tr style="background:var(--bg-raised);">
+    <td colspan="7" style="padding:12px 16px;font-weight:700;text-align:right;color:var(--text-2)">TOTAL</td>
+    <td style="padding:12px 16px;font-weight:800;color:var(--teal);font-size:15px">${fmtMXN(totalImporte)}</td>
+    <td></td>
+  </tr>`;
+
+  // Historial
+  renderHistorialPagos(data.filter(c => c.pagado));
+}
+
+function renderHistorialPagos(pagados) {
+  $('tbHistorialPagos').innerHTML = pagados.length
+    ? pagados.map(c => {
+        const pago = c.tipo_nomina === 'QUINCENAL' ? calcPagoQuincenal(c.pago_mensual_total) : c.pago_mensual_total;
+        return `<tr>
+          <td style="font-weight:600">${c.empresa}</td>
+          <td class="td-mono" style="color:var(--teal)">${c.folio}</td>
+          <td>${c.acreditado}</td>
+          <td class="td-mono" style="font-size:11px">${c.rfc || '—'}</td>
+          <td>${c.tipo_nomina}</td>
+          <td style="text-align:center;font-weight:600">${c.periodo_actual}/${c.tipo_nomina==='QUINCENAL'?c.plazo_meses*2:c.plazo_meses}</td>
+          <td style="font-weight:700">${fmtMXN(pago)}</td>
+          <td style="font-size:12px;color:var(--text-2)">${fmtDate(new Date().toISOString())}</td>
+          <td><span class="layout-badge-paid">Confirmado</span></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:20px">Sin pagos confirmados</td></tr>';
+}
+
+function toggleAll(chk) {
+  document.querySelectorAll('.layout-chk:not(:disabled)').forEach(c => c.checked = chk.checked);
+}
+
+function marcarPeriodoPagado() {
+  const checked = [...document.querySelectorAll('.layout-chk:checked:not(:disabled)')];
+  if (!checked.length) { toast('Selecciona al menos un crédito', 'info'); return; }
+  checked.forEach(chk => {
+    const idx = parseInt(chk.dataset.idx);
+    if (layoutData[idx]) layoutData[idx].pagado = true;
+  });
+  renderLayouts();
+  toast(`✅ ${checked.length} pago(s) confirmados`, 'success');
+}
+
+function generarLayoutHTML() {
+  const tipo    = $('layoutTipo')?.value || 'descuento';
+  const periodo = $('layoutPeriodo')?.value || '';
+  const empFiltro = $('layoutEmpresa')?.value || '';
+  let data = layoutData;
+  if (empFiltro) data = data.filter(c => String(c.empresa_id) === empFiltro);
+
+  const [anio, mes] = (periodo || '2026-01').split('-').map(Number);
+  const perLabel    = new Date(anio, mes-1).toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+  const esDes       = tipo === 'descuento';
+  const totalImporte= data.reduce((s,c) => s + (c.tipo_nomina==='QUINCENAL'?calcPagoQuincenal(c.pago_mensual_total):c.pago_mensual_total), 0);
+
+  const filas = data.map(c => {
+    const pago    = c.tipo_nomina==='QUINCENAL' ? calcPagoQuincenal(c.pago_mensual_total) : c.pago_mensual_total;
+    const numDesc = esDes
+      ? (c.tipo_nomina==='QUINCENAL' ? c.plazo_meses*2 : c.plazo_meses)
+      : `${c.periodo_actual}/${c.tipo_nomina==='QUINCENAL'?c.plazo_meses*2:c.plazo_meses}`;
+    return `<tr>
+      <td>${c.empresa}</td><td>${c.acreditado}</td>
+      <td style="font-family:monospace;font-size:11pt">${c.rfc||'—'}</td>
+      <td>${c.tipo_nomina}</td>
+      <td style="font-family:monospace">${c.folio}</td>
+      <td style="text-align:center">${numDesc}</td>
+      <td style="text-align:right;font-weight:700">$${pago.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>${esDes?'Aviso Descuentos':'Confirmación Pagos'} — ${perLabel}</title>
+<style>
+  body{font-family:'Calibri',Arial,sans-serif;font-size:11pt;color:#111;padding:24px 32px}
+  h1{font-size:15pt;color:#1BA896;margin-bottom:4px}
+  h2{font-size:12pt;color:#444;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th{background:#0d1117;color:white;padding:8px 10px;text-align:left;font-size:10pt}
+  td{padding:7px 10px;border-bottom:1px solid #e2e8f0;font-size:10pt}
+  tr:nth-child(even) td{background:#f7fafa}
+  tfoot td{background:#0d1117;color:#1BA896;font-weight:700;padding:10px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:12px;border-bottom:3px solid #1BA896}
+  .logo{font-size:22pt;font-weight:800;color:#1BA896}
+  .meta{font-size:10pt;color:#555;text-align:right}
+  @media print{body{padding:0}}
+</style></head><body>
+<div class="header">
+  <div><div class="logo">M Monety</div><div style="font-size:9pt;color:#888">Soluciones financieras que te respaldan</div></div>
+  <div class="meta"><strong>${esDes?'AVISO A EMPRESA PARA DESCUENTOS':'AVISO DE RECUPERACIÓN DE PAGOS'}</strong><br>Periodo: ${perLabel}<br>Generado: ${new Date().toLocaleDateString('es-MX')}</div>
+</div>
+<h1>${esDes?'Aviso a empresa para descuentos':'Aviso empresa de recuperación de pagos'}</h1>
+<h2>${perLabel} · ${data.length} créditos · Total: $${totalImporte.toFixed(2)}</h2>
+<table>
+  <thead><tr>
+    <th>Empresa</th><th>Empleado</th><th>RFC</th><th>Tipo desc.</th>
+    <th>ID Crédito</th><th>${esDes?'Descuentos':'No. Desc.'}</th><th>Importe</th>
+  </tr></thead>
+  <tbody>${filas}</tbody>
+  <tfoot><tr>
+    <td colspan="6" style="text-align:right">TOTAL</td>
+    <td style="text-align:right">$${totalImporte.toFixed(2)}</td>
+  </tr></tfoot>
+</table>
+<br><br>
+<p style="font-size:9pt;color:#777">Documento generado automáticamente por el sistema Monety · Confidencial</p>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  if (win) { win.document.open(); win.document.write(html); win.document.close(); }
+  else toast('Permite ventanas emergentes para exportar', 'error');
 }
 
 /* ══════════════════════════════════════════════════════════
