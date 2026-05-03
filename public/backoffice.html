@@ -824,8 +824,9 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
                 </select>
               </div>
               <div style="margin-left:auto;display:flex;gap:10px;">
-                <button class="btn-sm primary" onclick="generarLayoutHTML()">⬇ Exportar Layout</button>
-                <button class="btn-sm ghost" onclick="marcarPeriodoPagado()">✓ Marcar periodo pagado</button>
+                <button class="btn-sm ghost" onclick="generarLayoutDB()">⚡ Generar layout</button>
+                <button class="btn-sm primary" onclick="generarLayoutHTML()">⬇ Exportar PDF</button>
+                <button class="btn-sm ghost" onclick="marcarPeriodoPagado()">✓ Confirmar pagados</button>
               </div>
             </div>
           </div>
@@ -885,6 +886,18 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
           </div>
         </div>
         <div class="page-body">
+
+          <!-- Carga desde solicitud -->
+          <div class="section-card" style="margin-bottom:16px;">
+            <div style="padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+              <div style="font-size:13px;font-weight:600;color:var(--text-2)">Cargar datos de solicitud existente:</div>
+              <input type="text" id="simFolioLoad" placeholder="MNT-000001"
+                style="padding:8px 12px;background:var(--bg-raised);border:1.5px solid var(--border);border-radius:8px;color:var(--text-1);font-size:13px;font-family:var(--font-mono);width:160px;">
+              <button class="btn-sm primary" onclick="cargarDesdeFolio()">📥 Cargar</button>
+              <div id="simLoadMsg" style="font-size:13px;color:var(--text-2);">Modifica monto, plazo o tasa para proponer condiciones distintas al cliente.</div>
+            </div>
+          </div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
 
             <!-- Panel izquierdo: controles -->
@@ -910,7 +923,7 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
                   <div>
                     <label style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px;">Plazo</label>
                     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;" id="plazoGrid">
-                      ${[3,6,9,12,18,24,30,36].map(p=>`<button class="plazo-btn${p===12?' active':''}" onclick="setPlazo(${p})">${p}m</button>`).join('')}
+                      <!-- Rendered by JS in initSim() -->
                     </div>
                   </div>
 
@@ -929,9 +942,9 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
                   <div>
                     <label style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px;">Tipo de nómina</label>
                     <div style="display:flex;gap:8px;">
-                      <button class="plazo-btn active" id="tipoMens" onclick="setTipoNom('MENSUAL')">Mensual</button>
-                      <button class="plazo-btn" id="tipoQuinc" onclick="setTipoNom('QUINCENAL')">Quincenal</button>
-                      <button class="plazo-btn" id="tipoSem" onclick="setTipoNom('SEMANAL')">Semanal</button>
+                      <button class="plazo-btn tipo-nom-btn active" data-tipo="MENSUAL" onclick="setTipoNom('MENSUAL')">Mensual</button>
+                      <button class="plazo-btn tipo-nom-btn" data-tipo="QUINCENAL" onclick="setTipoNom('QUINCENAL')">Quincenal</button>
+                      <button class="plazo-btn tipo-nom-btn" data-tipo="SEMANAL" onclick="setTipoNom('SEMANAL')">Semanal</button>
                     </div>
                   </div>
 
@@ -1217,6 +1230,7 @@ function initApp() {
   $('fechaHoy').textContent   = new Date().toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
   navigate('dashboard', document.querySelector('[data-page="dashboard"]'));
+  initSim(); // Pre-renderiza los botones de plazo
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1235,7 +1249,7 @@ function navigate(page, btn) {
   if (page === 'cartera')       loadCartera();
   if (page === 'empresas')      loadEmpresas();
   if (page === 'layouts')       loadLayouts();
-  if (page === 'simulador_anl') { calcSim(); renderPropuestas(); }
+  if (page === 'simulador_anl') { initSim(); calcSim(); renderPropuestas(); }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1772,9 +1786,22 @@ function abrirDocumento(tipo) {
 let simPlazo   = 12;
 let simTipoNom = 'MENSUAL';
 
+// Inicializa los botones de plazo (evita el bug del template literal estático)
+function initSim() {
+  const grid = $('plazoGrid');
+  if (!grid || grid.children.length > 0) return; // ya inicializado
+  [3,6,9,12,18,24,30,36].forEach(p => {
+    const btn = document.createElement('button');
+    btn.className  = 'plazo-btn' + (p === 12 ? ' active' : '');
+    btn.textContent= p + 'm';
+    btn.onclick    = () => setPlazo(p);
+    grid.appendChild(btn);
+  });
+}
+
 function setPlazo(p) {
   simPlazo = p;
-  document.querySelectorAll('.plazo-btn[onclick^="setPlazo"]').forEach(b => {
+  document.querySelectorAll('#plazoGrid .plazo-btn').forEach(b => {
     b.classList.toggle('active', b.textContent === `${p}m`);
   });
   calcSim();
@@ -1782,10 +1809,8 @@ function setPlazo(p) {
 
 function setTipoNom(t) {
   simTipoNom = t;
-  ['MENSUAL','QUINCENAL','SEMANAL'].forEach(x => {
-    const el = $(`tipo${x === 'MENSUAL' ? 'Mens' : x === 'QUINCENAL' ? 'Quinc' : 'Sem'}`);
-    if (el) el.classList.toggle('active', x === t);
-  });
+  document.querySelectorAll('.tipo-nom-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tipo === t));
   calcSim();
 }
 
@@ -1934,13 +1959,75 @@ function borrarPropuesta(id) {
 }
 function limpiarPropuestas() { localStorage.removeItem('mnty_propuestas'); renderPropuestas(); }
 
+/* Carga los datos de una solicitud existente en el simulador */
+async function cargarDesdeFolio() {
+  const folio = ($('simFolioLoad')?.value || '').trim().toUpperCase();
+  if (!folio) { toast('Ingresa un folio (ej. MNT-000001)', 'info'); return; }
+
+  const msgEl = $('simLoadMsg');
+  if (msgEl) msgEl.textContent = '⏳ Cargando...';
+
+  try {
+    // Buscar en la lista de solicitudes ya cargadas
+    let sol = allSolicitudes.find(s => s.folio === folio);
+
+    // Si no está en caché, consultar al backend
+    if (!sol) {
+      const d = await apiFetch(`/solicitudes/estado/${folio}`);
+      sol = d.solicitud;
+    }
+
+    if (!sol) throw new Error('Solicitud no encontrada');
+
+    // Aplicar datos al simulador
+    const monto      = parseFloat(sol.monto_solicitado || sol.monto_aprobado || 15000);
+    const plazo      = parseInt(sol.plazo_meses || 12);
+    const salario    = parseFloat(sol.salario_mensual_neto || 0);
+    const tipoNomina = (sol.tipo_nomina || 'MENSUAL').toUpperCase();
+    // Tasa: usa la del crédito si existe, si no la estándar según tipo
+    const tasaMens   = sol.tasa_nominal_mensual
+      ? parseFloat(sol.tasa_nominal_mensual) * 100
+      : (sol.tipo_credito === 'PERSONAL' ? 5.0 : 4.3);
+
+    // Actualizar controles
+    if ($('simMonto'))   $('simMonto').value   = Math.min(80000, Math.max(3000, monto));
+    if ($('simTasa'))    $('simTasa').value     = Math.min(8.0, Math.max(1.0, tasaMens));
+    if ($('simSalario')) $('simSalario').value  = salario;
+    if ($('simFolioRef')) $('simFolioRef').value = folio;
+
+    // Plazo
+    simPlazo = plazo;
+    document.querySelectorAll('#plazoGrid .plazo-btn').forEach(b => {
+      b.classList.toggle('active', b.textContent === `${plazo}m`);
+    });
+
+    // Tipo nómina
+    simTipoNom = tipoNomina;
+    document.querySelectorAll('.tipo-nom-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.tipo === tipoNomina));
+
+    calcSim();
+
+    const nombre = sol.nombre || sol.nombres || 'el solicitante';
+    if (msgEl) {
+      msgEl.innerHTML = `✅ Datos de <strong style="color:var(--teal)">${nombre}</strong> cargados — `+
+        `Monto: ${fmtMXN(monto)} · Plazo: ${plazo}m · Salario: ${fmtMXN(salario)}`;
+    }
+    toast(`✅ Solicitud ${folio} cargada`, 'success');
+
+  } catch (err) {
+    if (msgEl) msgEl.textContent = `❌ ${err.message}`;
+    toast(`No se pudo cargar: ${err.message}`, 'error');
+  }
+}
+
 /* ══════════════════════════════════════════════════════════
    LAYOUTS DE NÓMINA
 ══════════════════════════════════════════════════════════ */
 let layoutData = []; // créditos activos cargados
 
 async function loadLayouts() {
-  // Cargar empresas en el filtro
+  // 1. Cargar empresas en el filtro
   try {
     const d = await apiFetch('/empresas');
     const sel = $('layoutEmpresa');
@@ -1952,28 +2039,169 @@ async function loadLayouts() {
     }
   } catch (_) {}
 
-  // Llenar selector de periodos (últimos 12 meses)
+  // 2. Llenar selector de periodos desde la BD (o últimos 12 meses si no hay)
   const periodoSel = $('layoutPeriodo');
   if (periodoSel) {
-    periodoSel.innerHTML = '';
-    const now = new Date();
-    for (let i = 0; i < 13; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const val   = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      const label = d.toLocaleDateString('es-MX', { month:'long', year:'numeric' });
-      periodoSel.innerHTML += `<option value="${val}"${i===0?' selected':''}>${label.charAt(0).toUpperCase()+label.slice(1)}</option>`;
+    try {
+      const dp = await apiFetch('/layouts/periodos');
+      if (dp.periodos && dp.periodos.length) {
+        periodoSel.innerHTML = dp.periodos.map(p =>
+          `<option value="${p.periodo}">${formatPeriodo(p.periodo)} (${p.total} créditos)</option>`
+        ).join('');
+      } else {
+        // Fallback: últimos 12 meses
+        periodoSel.innerHTML = '';
+        const now = new Date();
+        for (let i = 0; i < 13; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+          periodoSel.innerHTML += `<option value="${val}"${i===0?' selected':''}>${formatPeriodo(val)}</option>`;
+        }
+      }
+    } catch {
+      periodoSel.innerHTML = '';
+      const now = new Date();
+      for (let i = 0; i < 13; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        periodoSel.innerHTML += `<option value="${val}"${i===0?' selected':''}>${formatPeriodo(val)}</option>`;
+      }
     }
   }
 
-  // Cargar créditos activos
+  await renderLayouts();
+}
+
+function formatPeriodo(val) {
+  const [y, m] = val.split('-').map(Number);
+  const label = new Date(y, m-1).toLocaleDateString('es-MX', { month:'long', year:'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+// IDs de los registros actuales de BD (para confirmar lote)
+let layoutIds = {};
+
+async function renderLayouts() {
+  const empFiltro = $('layoutEmpresa')?.value || '';
+  const periodo   = $('layoutPeriodo')?.value || '';
+  const tipo      = ($('layoutTipo')?.value   || 'descuento').toUpperCase();
+
+  let rows = [], totales = {};
+
   try {
-    const d = await apiFetch('/creditos?estado=ACTIVO&limit=500');
-    layoutData = d.data || [];
+    const params = new URLSearchParams();
+    if (periodo)   params.set('periodo', periodo);
+    if (empFiltro) params.set('empresa_id', empFiltro);
+    if (tipo)      params.set('tipo', tipo);
+    params.set('limit', '500');
+
+    const d = await apiFetch(`/layouts?${params}`);
+    rows    = d.data    || [];
+    totales = d.totales || {};
   } catch {
-    layoutData = generarCreditosDemo();
+    // Sin datos reales → mostrar aviso de generación
+    rows    = [];
+    totales = {};
   }
 
-  renderLayouts();
+  // Guardar IDs por índice para el lote
+  layoutIds = {};
+  rows.forEach((r, i) => { layoutIds[i] = r.id; });
+
+  // KPIs desde la BD
+  const totalCreditos = parseInt(totales.total   || 0);
+  const importeTotal  = parseFloat(totales.importe_total   || 0);
+  const confirmados   = parseInt(totales.confirmados || 0);
+  const empresasCount = parseInt(totales.empresas_count || rows.filter((r,i,a)=>a.findIndex(x=>x.empresa===r.empresa)===i).length);
+
+  $('layoutKpis').innerHTML = `
+    <div class="stat-card"><div class="stat-header"><span class="stat-label">Créditos en layout</span><div class="stat-icon teal">◎</div></div>
+      <div class="stat-value">${totalCreditos}</div>
+      <div class="stat-change">${rows.length === 0 ? '⚠️ Sin layout generado' : 'en este periodo'}</div></div>
+    <div class="stat-card"><div class="stat-header"><span class="stat-label">Total a recuperar</span><div class="stat-icon green">$</div></div>
+      <div class="stat-value" style="font-size:20px">${fmtMXN(importeTotal)}</div>
+      <div class="stat-change">este periodo</div></div>
+    <div class="stat-card"><div class="stat-header"><span class="stat-label">Pagos confirmados</span><div class="stat-icon teal">✓</div></div>
+      <div class="stat-value" style="color:var(--green)">${confirmados}</div>
+      <div class="stat-change">de ${totalCreditos}</div></div>
+    <div class="stat-card"><div class="stat-header"><span class="stat-label">Pendientes</span><div class="stat-icon amber">◌</div></div>
+      <div class="stat-value" style="color:var(--amber)">${parseInt(totales.pendientes||0)+parseInt(totales.enviados||0)}</div>
+      <div class="stat-change">por confirmar</div></div>
+  `;
+
+  const esDes = tipo === 'DESCUENTO';
+  if ($('layoutTableTitle')) $('layoutTableTitle').textContent =
+    `${esDes ? 'Aviso a empresa para descuentos' : 'Aviso de recuperación de pagos'} — ${formatPeriodo(periodo || new Date().toISOString().slice(0,7))}`;
+  if ($('layoutTableSub')) $('layoutTableSub').textContent =
+    rows.length ? `${rows.length} créditos · Total: ${fmtMXN(importeTotal)}` : 'Sin registros — usa "Generar Layout" para crear el layout de este periodo';
+
+  if ($('layoutThead')) $('layoutThead').innerHTML = `<tr>
+    <th><input type="checkbox" onchange="toggleAll(this)" style="accent-color:var(--teal)"></th>
+    <th>Empresa</th><th>Empleado</th><th>RFC</th><th>Tipo</th>
+    <th>ID Crédito</th>
+    <th>${esDes ? 'Total desc.' : 'No. Desc.'}</th>
+    <th>Importe</th><th>Estado</th>
+  </tr>`;
+
+  if ($('tbLayouts')) {
+    if (!rows.length) {
+      $('tbLayouts').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;">
+        <div style="color:var(--text-3);margin-bottom:12px">Sin layout generado para este periodo</div>
+        <button class="btn-sm primary" onclick="generarLayoutDB()">⚡ Generar layout automáticamente</button>
+      </td></tr>`;
+    } else {
+      $('tbLayouts').innerHTML = rows.map((r, i) => {
+        const pagado  = r.estado === 'CONFIRMADO';
+        const enviado = r.estado === 'ENVIADO';
+        const numDesc = esDes ? r.total_descuentos : `${r.numero_descuento}/${r.total_descuentos}`;
+        const estBadge = pagado
+          ? '<span class="layout-badge-paid">✓ Confirmado</span>'
+          : enviado
+          ? '<span style="background:rgba(88,166,255,.15);color:var(--blue);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">Enviado</span>'
+          : '<span class="layout-badge-pend">Pendiente</span>';
+        return `<tr class="${pagado ? 'layout-paid' : ''}">
+          <td><input type="checkbox" class="layout-chk" data-id="${r.id}" data-idx="${i}"
+            ${pagado?'disabled checked':''} style="accent-color:var(--teal)"></td>
+          <td style="font-weight:600">${r.empresa}</td>
+          <td>${r.acreditado}</td>
+          <td class="td-mono" style="font-size:11px">${r.curp || r.rfc || '—'}</td>
+          <td><span style="background:var(--bg-active);padding:2px 8px;border-radius:4px;font-size:11px">${r.tipo_frecuencia}</span></td>
+          <td class="td-mono" style="color:var(--teal)">${r.folio}</td>
+          <td style="text-align:center;font-weight:600">${numDesc}</td>
+          <td style="font-weight:700;color:${pagado?'var(--text-3)':'var(--text-1)'}">${fmtMXN(r.importe)}</td>
+          <td>${estBadge}</td>
+        </tr>`;
+      }).join('');
+
+      // Pie de tabla
+      if ($('layoutTfoot')) $('layoutTfoot').innerHTML = `<tr style="background:var(--bg-raised);">
+        <td colspan="7" style="padding:12px 16px;font-weight:700;text-align:right;color:var(--text-2)">TOTAL</td>
+        <td style="padding:12px 16px;font-weight:800;color:var(--teal);font-size:15px">${fmtMXN(importeTotal)}</td>
+        <td></td>
+      </tr>`;
+    }
+  }
+
+  // Historial de pagos confirmados
+  const pagados = rows.filter(r => r.estado === 'CONFIRMADO');
+  renderHistorialPagos(pagados);
+}
+
+async function generarLayoutDB() {
+  const periodo   = $('layoutPeriodo')?.value || new Date().toISOString().slice(0,7);
+  const tipo      = ($('layoutTipo')?.value   || 'descuento').toUpperCase();
+  const empFiltro = $('layoutEmpresa')?.value || null;
+
+  try {
+    const d = await apiFetch('/layouts/generar', {
+      method: 'POST',
+      body: JSON.stringify({ periodo, tipo, empresa_id: empFiltro ? parseInt(empFiltro) : undefined }),
+    });
+    toast(`✅ ${d.mensaje}`, 'success');
+    await renderLayouts();
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'error');
+  }
 }
 
 function generarCreditosDemo() {
@@ -2097,15 +2325,36 @@ function toggleAll(chk) {
   document.querySelectorAll('.layout-chk:not(:disabled)').forEach(c => c.checked = chk.checked);
 }
 
-function marcarPeriodoPagado() {
+async function marcarPeriodoPagado() {
   const checked = [...document.querySelectorAll('.layout-chk:checked:not(:disabled)')];
   if (!checked.length) { toast('Selecciona al menos un crédito', 'info'); return; }
-  checked.forEach(chk => {
-    const idx = parseInt(chk.dataset.idx);
-    if (layoutData[idx]) layoutData[idx].pagado = true;
-  });
-  renderLayouts();
-  toast(`✅ ${checked.length} pago(s) confirmados`, 'success');
+
+  const ids = checked.map(c => c.dataset.id).filter(Boolean);
+
+  if (!ids.length) {
+    // Modo demo (sin BD): marcar localmente
+    checked.forEach(chk => {
+      const idx = parseInt(chk.dataset.idx);
+      if (layoutData[idx]) layoutData[idx].pagado = true;
+    });
+    renderLayouts();
+    toast(`✅ ${checked.length} pago(s) confirmados (modo demo)`, 'success');
+    return;
+  }
+
+  // Pedir referencia bancaria opcional
+  const ref = prompt('Referencia bancaria / SPEI (opcional):') || null;
+
+  try {
+    const d = await apiFetch('/layouts/confirmar-lote', {
+      method: 'PATCH',
+      body: JSON.stringify({ ids, referencia_bancaria: ref }),
+    });
+    toast(`✅ ${d.confirmados} pago(s) confirmados en la BD`, 'success');
+    await renderLayouts();
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'error');
+  }
 }
 
 function generarLayoutHTML() {
