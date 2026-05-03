@@ -324,34 +324,165 @@ async function obtener(req, res, next) {
 
 /* ─────────────────────────────────────────────────────────────
    CAMBIAR ESTADO  (PATCH /api/v1/solicitudes/:id/estado)
+   Si el nuevo estado es APROBADA → formaliza el crédito automáticamente.
    ───────────────────────────────────────────────────────────── */
 async function cambiarEstado(req, res, next) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const { id } = req.params;
-    const { estado, comentario } = req.body;
+    const {
+      estado, comentario,
+      // Parámetros opcionales para personalizar el crédito al aprobar:
+      monto_aprobado, plazo_meses, tasa_nominal_mensual,
+      comision_apertura = 0, cuota_administracion = 0, seguro_desempleo = 0,
+      fecha_desembolso,
+    } = req.body;
 
-    const { rows } = await db(
+    // 1. Actualizar estado de la solicitud
+    const { rows } = await client.query(
       `UPDATE solicitudes SET estado=$1, atendida_por=$2, updated_at=NOW()
-       WHERE id=$3 RETURNING folio, estado`,
+       WHERE id=$3 RETURNING folio, estado, monto_solicitado, plazo_meses,
+             tipo_credito, tipo_nomina`,
       [estado, req.user.id, id]
     );
 
     if (!rows.length) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
     }
 
-    // Registrar en historial manualmente (además del trigger)
-    if (comentario) {
-      await db(
-        `INSERT INTO historial_estados (solicitud_id, estado_nuevo, comentario, usuario_id)
-         VALUES ($1,$2,$3,$4)`,
-        [id, estado, comentario, req.user.id]
+    const sol = rows[0];
+
+    // 2. Registrar en historial
+    await client.query(
+      `INSERT INTO historial_estados (solicitud_id, estado_nuevo, comentario, usuario_id)
+       VALUES ($1,$2,$3,$4)`,
+      [id, estado, comentario || null, req.user.id]
+    );
+
+    let creditoId = null;
+
+    // 3. Si se aprueba → crear crédito automáticamente
+    if (estado === 'APROBADA') {
+
+      // Verificar que no exista ya un crédito para esta solicitud
+      const { rows: existing } = await client.query(
+        'SELECT id FROM creditos WHERE solicitud_id=$1', [id]
       );
+
+      if (!existing.length) {
+        // Obtener evaluación para usar como referencia
+        const { rows: evalRows } = await client.query(
+          'SELECT id FROM evaluaciones WHERE solicitud_id=$1 AND resultado=$2',
+          [id, 'APROBADO']
+        );
+        if (!evalRows.length) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            ok: false,
+            message: 'No existe evaluación aprobada para esta solicitud. Evalúa primero antes de aprobar.',
+          });
+        }
+        const evalId = evalRows[0].id;
+
+        // Calcular condiciones (usar los del cuerpo del request si el analista las personalizó)
+        const montoFinal  = parseFloat(monto_aprobado  || sol.monto_solicitado);
+        const plazoFinal  = parseInt(plazo_meses       || sol.plazo_meses);
+        const tasaFinal   = parseFloat(tasa_nominal_mensual
+          || (sol.tipo_credito === 'NOMINA' ? 0.043 : 0.05));
+
+        const iva        = 0.16;
+        const tasaConIva = tasaFinal * (1 + iva);
+        const tasaAnual  = tasaFinal * 12;
+        const cat        = sol.tipo_credito === 'NOMINA' ? 0.59856 : 0.72;
+
+        // Fórmula de amortización francesa
+        const pagoMensual = montoFinal *
+          (tasaConIva * Math.pow(1 + tasaConIva, plazoFinal)) /
+          (Math.pow(1 + tasaConIva, plazoFinal) - 1);
+
+        const pagoTotal      = pagoMensual + parseFloat(cuota_administracion) + parseFloat(seguro_desempleo);
+        const totalIntereses = (pagoMensual * plazoFinal) - montoFinal;
+        const totalIva       = totalIntereses * iva;
+        const totalPagar     = montoFinal + totalIntereses + totalIva;
+
+        const desembolso  = fecha_desembolso ? new Date(fecha_desembolso) : new Date();
+        const vencimiento = new Date(desembolso);
+        vencimiento.setMonth(vencimiento.getMonth() + plazoFinal);
+
+        // Insertar crédito
+        const { rows: cRows } = await client.query(
+          `INSERT INTO creditos
+             (solicitud_id, evaluacion_id,
+              monto_aprobado, plazo_meses,
+              tasa_nominal_mensual, tasa_nominal_anual, cat_anual, iva,
+              comision_apertura, cuota_administracion, seguro_desempleo,
+              pago_mensual_capital_interes, pago_mensual_total,
+              total_intereses, total_iva, monto_total_pagar,
+              saldo_insoluto, fecha_desembolso, fecha_vencimiento)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+           RETURNING id`,
+          [id, evalId,
+           montoFinal, plazoFinal,
+           tasaFinal, tasaAnual, cat, iva,
+           comision_apertura, cuota_administracion, seguro_desempleo,
+           Math.round(pagoMensual * 100) / 100,
+           Math.round(pagoTotal   * 100) / 100,
+           Math.round(totalIntereses * 100) / 100,
+           Math.round(totalIva       * 100) / 100,
+           Math.round(totalPagar     * 100) / 100,
+           montoFinal,
+           desembolso.toISOString().slice(0, 10),
+           vencimiento.toISOString().slice(0, 10)]
+        );
+        creditoId = cRows[0].id;
+
+        // Generar tabla de amortización completa
+        const { generarAmortizacion } = require('../services/scoringService');
+        const tabla = generarAmortizacion({
+          monto:       montoFinal,
+          plazo:       plazoFinal,
+          tipoCredito: sol.tipo_credito,
+          fechaInicio: desembolso.toISOString().slice(0, 10),
+        });
+
+        for (const row of tabla) {
+          await client.query(
+            `INSERT INTO amortizacion
+               (credito_id, periodo, fecha_pago, saldo_inicial,
+                capital, interes, iva, cuota_administracion, seguro,
+                pago_fijo, pago_total, saldo_insoluto)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+            [creditoId, row.periodo, row.fechaPago, row.saldoInicial,
+             row.capital, row.interes, row.iva,
+             cuota_administracion, seguro_desempleo,
+             row.pagoFijo, row.pagoTotal, row.saldoInsoluto]
+          );
+        }
+
+        logger.info('Crédito auto-formalizado al aprobar', { creditoId, solicitudId: id, monto: montoFinal });
+      }
     }
 
+    await client.query('COMMIT');
     logger.info('Estado cambiado', { id, estado, agente: req.user.email });
-    res.json({ ok: true, folio: rows[0].folio, estado: rows[0].estado });
-  } catch (err) { next(err); }
+
+    res.json({
+      ok: true,
+      folio:     sol.folio,
+      estado:    sol.estado,
+      creditoId: creditoId || undefined,
+      mensaje:   estado === 'APROBADA' && creditoId
+        ? 'Solicitud aprobada y crédito formalizado automáticamente'
+        : undefined,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
