@@ -446,7 +446,13 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
 .empty-state .es-icon { font-size: 40px; margin-bottom: 12px; }
 .empty-state .es-text { font-size: 14px; }
 
-/* ── LOADER ──────────────────────────────────────────────── */
+/* ── DETAIL TABS ─────────────────────────────────────────── */
+.detail-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 24px; background: var(--bg-surface); }
+.detail-tab { padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
+.detail-tab:hover { color: var(--text-1); }
+.detail-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+.detail-tab-content { display: none; }
+.detail-tab-content.active { display: block; animation: fadeIn .2s ease; }
 .loader { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border-md); border-top-color: var(--teal); border-radius: 50%; animation: spin .7s linear infinite; }
 
 /* ── TOAST ───────────────────────────────────────────────── */
@@ -1067,7 +1073,6 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
         <div class="detail-folio" id="dFolio">MNT-000001</div>
         <div style="font-size:12px;color:var(--text-2);margin-top:3px" id="dFecha"></div>
       </div>
-      <!-- Botones de documentos (solo visibles cuando la solicitud está aprobada) -->
       <div id="docBtns" style="display:none;gap:8px;align-items:center;">
         <button id="btnCarta" class="btn-sm ghost" onclick="abrirDocumento('carta')" title="Carta de Aprobación">
           📄 Carta
@@ -1077,6 +1082,13 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
         </button>
       </div>
       <button class="btn-close" onclick="closeDetail()">×</button>
+    </div>
+    <!-- Tabs -->
+    <div class="detail-tabs">
+      <div class="detail-tab active" onclick="switchTab('main', this)">📋 Principal</div>
+      <div class="detail-tab" onclick="switchTab('extra', this)">📄 Datos adicionales</div>
+      <div class="detail-tab" onclick="switchTab('amort', this)">📊 Amortización</div>
+      <div class="detail-tab" onclick="switchTab('estado', this)">🔄 Estado</div>
     </div>
     <div class="detail-body" id="detailBody">
       <div class="empty-state"><div class="loader"></div></div>
@@ -1378,11 +1390,24 @@ async function loadDashboard() {
    SOLICITUDES
 ══════════════════════════════════════════════════════════ */
 async function loadSolicitudes() {
+  $('solCount').textContent = 'Cargando...';
   try {
     const data = await apiFetch('/solicitudes?limit=200');
     allSolicitudes = data.data || [];
-  } catch {
-    allSolicitudes = DEMO_SOLIS;
+    $('solCount').textContent = `${allSolicitudes.length} solicitudes`;
+  } catch (err) {
+    // Solo usar demo si es un error de red (no de auth)
+    if (err.message.includes('401') || err.message.includes('Token')) {
+      $('solCount').textContent = 'Error de autenticación — recarga la página';
+      toast('Sesión expirada. Por favor vuelve a iniciar sesión.', 'error');
+      doLogout();
+      return;
+    }
+    // Error de red real → cargar demo solo si no hay datos previos
+    if (!allSolicitudes.length) {
+      allSolicitudes = DEMO_SOLIS;
+      toast('Modo demo — sin conexión al servidor', 'info');
+    }
   }
   currentSolPage = 1;
   renderSolicitudes();
@@ -1588,6 +1613,14 @@ function openDetail(id, folio) {
   loadDetailData(id, folio);
 }
 
+function switchTab(tab, el) {
+  document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.detail-tab-content').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const content = document.getElementById(`dtab-${tab}`);
+  if (content) content.classList.add('active');
+}
+
 function closeDetail(e) {
   if (e && e.target !== $('detailOverlay')) return;
   $('detailOverlay').classList.remove('open');
@@ -1661,82 +1694,135 @@ async function loadDetailData(id, folio) {
   const telefono    = sol.telefono || '—';
 
   $('detailBody').innerHTML = `
-    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Solicitante</div>
-    <div class="info-grid">
-      <div class="info-item"><div class="info-label">Nombre</div><div class="info-value">${sol.nombre || '—'}</div></div>
-      <div class="info-item"><div class="info-label">Email</div><div class="info-value" style="font-size:13px">${email}</div></div>
-      <div class="info-item"><div class="info-label">Teléfono</div><div class="info-value">${telefono}</div></div>
-      <div class="info-item"><div class="info-label">Empresa</div><div class="info-value">${empresa}</div></div>
-      <div class="info-item"><div class="info-label">Antigüedad</div><div class="info-value">${antiguedad}</div></div>
-      <div class="info-item"><div class="info-label">Historial crediticio</div><div class="info-value">${historial}</div></div>
-      <div class="info-item"><div class="info-label">Salario neto</div><div class="info-value" style="color:var(--green)">${fmtMXN(salarioNeto)}</div></div>
-      <div class="info-item"><div class="info-label">Gastos mensuales</div><div class="info-value">${fmtMXN(sol.gastos_personales||0)}</div></div>
-    </div>
-
-    <div class="divider"></div>
-    <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Crédito solicitado</div>
-    <div class="info-grid">
-      <div class="info-item"><div class="info-label">Monto</div><div class="info-value big">${fmtMXN(monto)}</div></div>
-      <div class="info-item"><div class="info-label">Plazo</div><div class="info-value big">${plazo} meses</div></div>
-      <div class="info-item"><div class="info-label">Pago estimado</div><div class="info-value" style="color:var(--teal);font-weight:700">${fmtMXN(pago)} / mes</div></div>
-      <div class="info-item"><div class="info-label">Total a pagar</div><div class="info-value">${fmtMXN(pago*plazo)}</div></div>
-      <div class="info-item"><div class="info-label">Tipo</div><div class="info-value">${sol.tipo_credito||'—'}</div></div>
-      <div class="info-item"><div class="info-label">Estado</div><div class="info-value">${estadoBadge(sol.estado)}</div></div>
-    </div>
-
-    <div class="divider"></div>
-    <div class="score-section">
-      <div class="score-title">Evaluación crediticia</div>
-      ${Object.entries(pts).map(([k,v]) => {
-        const maxPts = k==='Ingreso'?50:k==='Historial'?40:30;
-        return `<div class="score-row">
-          <span class="score-name">${k}</span>
-          <div class="score-bar-track"><div class="score-bar-fill" style="width:${maxPts>0?(v/maxPts*100).toFixed(0):0}%"></div></div>
-          <span class="score-pts">${v}/${maxPts}</span>
-        </div>`;
-      }).join('')}
-      <div class="score-total-row">
-        <div>
-          <div class="score-total-label">Puntaje total</div>
-          <div style="font-size:12px;color:var(--text-2);margin-top:3px">Mínimo aprobatorio: 80 pts</div>
-        </div>
-        <div style="text-align:right">
-          <div class="score-total-val">${total}<span style="font-size:14px;color:var(--text-2)">/140</span></div>
-          <div style="margin-top:4px">${rankBadge(sol.ranking)} <span style="font-size:12px;color:${aprobado?'var(--green)':'var(--red)'}; margin-left:6px">${aprobado?'✓ Aprobado':'✗ Rechazado'}</span></div>
+    <!-- TAB: Principal -->
+    <div class="detail-tab-content active" id="dtab-main" style="padding:20px 24px;">
+      <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Solicitante</div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Nombre completo</div><div class="info-value">${sol.nombre || '—'}</div></div>
+        <div class="info-item"><div class="info-label">Email</div><div class="info-value" style="font-size:12px">${email}</div></div>
+        <div class="info-item"><div class="info-label">Teléfono</div><div class="info-value">${telefono}</div></div>
+        <div class="info-item"><div class="info-label">Empresa</div><div class="info-value">${empresa}</div></div>
+        <div class="info-item"><div class="info-label">Antigüedad</div><div class="info-value">${antiguedad}</div></div>
+        <div class="info-item"><div class="info-label">Historial crediticio</div><div class="info-value">${historial}</div></div>
+        <div class="info-item"><div class="info-label">Salario neto</div><div class="info-value" style="color:var(--green)">${fmtMXN(salarioNeto)}</div></div>
+        <div class="info-item"><div class="info-label">Gastos mensuales</div><div class="info-value">${fmtMXN(sol.gastos_personales||0)}</div></div>
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Crédito solicitado</div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Monto</div><div class="info-value big">${fmtMXN(monto)}</div></div>
+        <div class="info-item"><div class="info-label">Plazo</div><div class="info-value big">${plazo} meses</div></div>
+        <div class="info-item"><div class="info-label">Pago estimado</div><div class="info-value" style="color:var(--teal);font-weight:700">${fmtMXN(pago)} / mes</div></div>
+        <div class="info-item"><div class="info-label">Total a pagar</div><div class="info-value">${fmtMXN(pago*plazo)}</div></div>
+        <div class="info-item"><div class="info-label">Tipo</div><div class="info-value">${sol.tipo_credito||'—'}</div></div>
+        <div class="info-item"><div class="info-label">Nómina</div><div class="info-value">${sol.tipo_nomina||'—'}</div></div>
+        <div class="info-item"><div class="info-label">Estado</div><div class="info-value">${estadoBadge(sol.estado)}</div></div>
+        <div class="info-item"><div class="info-label">Fecha solicitud</div><div class="info-value">${fmtDate(sol.fecha_solicitud)}</div></div>
+      </div>
+      <div class="divider"></div>
+      <div class="score-section">
+        <div class="score-title">Evaluación crediticia</div>
+        ${Object.entries(pts).map(([k,v]) => {
+          const maxPts = k==='Ingreso'?50:k==='Historial'?40:30;
+          return `<div class="score-row">
+            <span class="score-name">${k}</span>
+            <div class="score-bar-track"><div class="score-bar-fill" style="width:${maxPts>0?(v/maxPts*100).toFixed(0):0}%"></div></div>
+            <span class="score-pts">${v}/${maxPts}</span>
+          </div>`;
+        }).join('')}
+        <div class="score-total-row">
+          <div>
+            <div class="score-total-label">Puntaje total</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:3px">Mínimo aprobatorio: 80 pts</div>
+          </div>
+          <div style="text-align:right">
+            <div class="score-total-val">${total}<span style="font-size:14px;color:var(--text-2)">/140</span></div>
+            <div style="margin-top:4px">${rankBadge(sol.ranking)} <span style="font-size:12px;color:${aprobado?'var(--green)':'var(--red)'}; margin-left:6px">${aprobado?'✓ Aprobado':'✗ Rechazado'}</span></div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="divider"></div>
-    <div style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Cambiar estado</div>
-    <div class="estado-selector">
-      ${['EN_REVISION','PRE_APROBADA','APROBADA','RECHAZADA','CANCELADA'].map(e => `
-        <button class="estado-btn${sol.estado===e?' selected':''}" onclick="cambiarEstado('${currentSolId}','${e}',this)">${ESTADO_LABELS[e]?.[1]||e}</button>
-      `).join('')}
+    <!-- TAB: Datos adicionales -->
+    <div class="detail-tab-content" id="dtab-extra" style="padding:20px 24px;">
+      <div style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Datos personales</div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">CURP</div><div class="info-value mono">${sol.curp||'—'}</div></div>
+        <div class="info-item"><div class="info-label">RFC</div><div class="info-value mono">${sol.rfc||'—'}</div></div>
+        <div class="info-item"><div class="info-label">Domicilio</div><div class="info-value" style="font-size:12px">${sol.calle||'—'}, ${sol.colonia||''}, ${sol.alcaldia_mpio||''}, ${sol.entidad||''} ${sol.cp||''}</div></div>
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Datos laborales completos</div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Salario bruto</div><div class="info-value">${fmtMXN(sol.salario_mensual_bruto||0)}</div></div>
+        <div class="info-item"><div class="info-label">Salario neto</div><div class="info-value">${fmtMXN(sol.salario_mensual_neto||0)}</div></div>
+        <div class="info-item"><div class="info-label">Fecha ingreso</div><div class="info-value">${fmtDate(sol.fecha_ingreso_emp)}</div></div>
+        <div class="info-item"><div class="info-label">Fecha baja estimada</div><div class="info-value">${fmtDate(sol.fecha_baja_estim)}</div></div>
+        <div class="info-item"><div class="info-label">Tipo nómina</div><div class="info-value">${sol.tipo_nomina||'—'}</div></div>
+        <div class="info-item"><div class="info-label">Tiene INFONAVIT</div><div class="info-value">${sol.tiene_infonavit?'Sí':'No'}</div></div>
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Desglose de gastos (cuestionario)</div>
+      <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="info-item"><div class="info-label">Vivienda</div><div class="info-value">${fmtMXN(sol.gasto_vivienda||0)}</div></div>
+        <div class="info-item"><div class="info-label">Alimentación</div><div class="info-value">${fmtMXN(sol.gasto_alimentacion||0)}</div></div>
+        <div class="info-item"><div class="info-label">Transporte</div><div class="info-value">${fmtMXN(sol.gasto_transporte||0)}</div></div>
+        <div class="info-item"><div class="info-label">Otros fijos</div><div class="info-value">${fmtMXN(sol.gasto_otros||0)}</div></div>
+        <div class="info-item"><div class="info-label">Deudas activas</div><div class="info-value">${fmtMXN(sol.pago_mensual_deudas||0)}</div></div>
+        <div class="info-item"><div class="info-label">Total gastos</div><div class="info-value" style="color:var(--amber);font-weight:700">${fmtMXN((sol.gastos_personales||0))}</div></div>
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Otras declaraciones</div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Percepciones variables</div><div class="info-value">${sol.tiene_deudas !== undefined ? (sol.tiene_percep_variables ? 'Sí — ' + fmtMXN(sol.percepciones_variables||0) + '/mes' : 'No') : '—'}</div></div>
+        <div class="info-item"><div class="info-label">Historial previo Monety</div><div class="info-value">${sol.previo_monety !== undefined ? (sol.previo_monety ? 'Sí' : 'No') : '—'}</div></div>
+        <div class="info-item"><div class="info-label">Autoriza descuento nómina</div><div class="info-value" style="color:var(--green)">${sol.autoriza_descuento !== false ? '✓ Sí' : '✗ No'}</div></div>
+        <div class="info-item"><div class="info-label">Dependientes económicos</div><div class="info-value">${sol.num_dependientes > 0 ? sol.num_dependientes + ' personas' : 'Ninguno'}</div></div>
+        <div class="info-item"><div class="info-label">Tipo de deuda</div><div class="info-value">${sol.tipo_deuda||'—'}</div></div>
+      </div>
     </div>
-    <textarea id="comentarioEstado" placeholder="Comentario (opcional)..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-raised);border:1.5px solid var(--border);color:var(--text-1);font-size:13px;resize:vertical;min-height:70px;margin-bottom:12px"></textarea>
-    <button class="btn-sm primary" onclick="guardarEstado('${currentSolId}')">Guardar cambio</button>
 
-    <div class="divider"></div>
-    <div style="margin-bottom:12px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Tabla de amortización</div>
-    <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">
-      <table class="amort-table">
-        <thead><tr>
-          <th>#</th><th>Saldo inicial</th><th>Capital</th>
-          <th>Interés</th><th>IVA</th><th>Pago</th><th>Saldo final</th>
-        </tr></thead>
-        <tbody>
-          ${amort.map(r => `<tr>
-            <td class="td-mono" style="color:var(--text-2)">${r.periodo}</td>
-            <td>${fmtMXN(r.saldo+r.capital)}</td>
-            <td style="color:var(--teal)">${fmtMXN(r.capital)}</td>
-            <td>${fmtMXN(r.interes)}</td>
-            <td style="color:var(--text-2)">${fmtMXN(r.iva)}</td>
-            <td style="font-weight:600">${fmtMXN(r.pago)}</td>
-            <td>${fmtMXN(r.saldo)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
+    <!-- TAB: Amortización -->
+    <div class="detail-tab-content" id="dtab-amort" style="padding:20px 24px;">
+      <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-2)">${plazo} pagos de ${fmtMXN(pago)} · Total: ${fmtMXN(pago*plazo)}</div>
+      </div>
+      <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">
+        <table class="amort-table">
+          <thead><tr>
+            <th>#</th><th>Saldo inicial</th><th>Capital</th>
+            <th>Interés</th><th>IVA</th><th>Pago</th><th>Saldo final</th>
+          </tr></thead>
+          <tbody>
+            ${amort.map(r => `<tr>
+              <td class="td-mono" style="color:var(--text-2)">${r.periodo}</td>
+              <td>${fmtMXN(r.saldo+r.capital)}</td>
+              <td style="color:var(--teal)">${fmtMXN(r.capital)}</td>
+              <td>${fmtMXN(r.interes)}</td>
+              <td style="color:var(--text-2)">${fmtMXN(r.iva)}</td>
+              <td style="font-weight:600">${fmtMXN(r.pago)}</td>
+              <td>${fmtMXN(r.saldo)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: Estado -->
+    <div class="detail-tab-content" id="dtab-estado" style="padding:20px 24px;">
+      <div style="margin-bottom:14px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Cambiar estado</div>
+      <div class="estado-selector">
+        ${['EN_REVISION','PRE_APROBADA','APROBADA','RECHAZADA','CANCELADA'].map(e => `
+          <button class="estado-btn${sol.estado===e?' selected':''}" onclick="cambiarEstado('${currentSolId}','${e}',this)">${ESTADO_LABELS[e]?.[1]||e}</button>
+        `).join('')}
+      </div>
+      <textarea id="comentarioEstado" placeholder="Comentario (opcional)..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-raised);border:1.5px solid var(--border);color:var(--text-1);font-size:13px;resize:vertical;min-height:70px;margin-bottom:12px;margin-top:12px"></textarea>
+      <button class="btn-sm primary" style="width:100%;padding:12px;" onclick="guardarEstado('${currentSolId}')">Guardar cambio de estado</button>
+
+      ${sol.motivo_rechazo ? `<div style="margin-top:16px;background:rgba(248,81,73,.08);border-radius:8px;padding:12px;border-left:3px solid var(--red)">
+        <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:4px">MOTIVO DE RECHAZO</div>
+        <div style="font-size:13px;color:var(--text-2)">${sol.motivo_rechazo}</div>
+      </div>` : ''}
     </div>
   `;
 }

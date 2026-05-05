@@ -21,11 +21,18 @@ async function crear(req, res, next) {
       empresaId, tipoNomina, fechaIngresoEmp, fechaBajaEstim,
       salarioBruto, salarioNeto,
       historialCrediticio,
+      // Percepciones extra (del cuestionario)
+      tienePercepVariables = false,
+      percepcionesVariables = 0,
       // Crédito
       tipoCredito, montoSolicitado, plazoMeses,
       gastos = 0, tieneDeudas = false, tipoDeuda, pagoMensualDeudas = 0,
       tieneInfonavit = false, tipoDescInfonavit, montoInfonavit = 0,
     } = req.body;
+
+    /* Ingreso neto efectivo = salario neto + percepciones variables (si aplica) */
+    const ingresoNetoEfectivo = parseFloat(salarioNeto) +
+      (tienePercepVariables ? parseFloat(percepcionesVariables || 0) : 0);
 
     /* 1. Upsert del solicitante (por email) */
     const solRes = await client.query(
@@ -75,9 +82,9 @@ async function crear(req, res, next) {
     );
     const { id: solicitudId, folio } = solId.rows[0];
 
-    /* 4. Scoring automático */
+    /* 4. Scoring automático — usa el ingreso efectivo (salario + percepciones) */
     const scoring = evaluar({
-      salarioNeto:    parseFloat(salarioNeto),
+      salarioNeto:    ingresoNetoEfectivo,
       historial:      historialCrediticio,
       antiguedadAnos,
       montoSolicitado: parseFloat(montoSolicitado),
@@ -105,7 +112,7 @@ async function crear(req, res, next) {
         scoring.puntos.historial,
         scoring.puntos.antiguedad,
         scoring.puntos.capacidadPago,
-        salarioNeto,
+        ingresoNetoEfectivo,   // ingreso_neto_calculado (salario + percepciones)
         scoring.financiero.flujoDisponible,
         scoring.financiero.capacidadPago,
         scoring.financiero.ratio,
@@ -372,19 +379,65 @@ async function cambiarEstado(req, res, next) {
       );
 
       if (!existing.length) {
-        // Obtener evaluación para usar como referencia
+        // Buscar evaluación existente (cualquier resultado) o crearla si no existe
+        let evalId;
         const { rows: evalRows } = await client.query(
-          'SELECT id FROM evaluaciones WHERE solicitud_id=$1 AND resultado=$2',
-          [id, 'APROBADO']
+          'SELECT id, resultado, puntaje_total FROM evaluaciones WHERE solicitud_id=$1 ORDER BY fecha_evaluacion DESC LIMIT 1',
+          [id]
         );
-        if (!evalRows.length) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({
-            ok: false,
-            message: 'No existe evaluación aprobada para esta solicitud. Evalúa primero antes de aprobar.',
+
+        if (evalRows.length) {
+          evalId = evalRows[0].id;
+          // Si la evaluación estaba rechazada, actualizarla a APROBADO (decisión manual del analista)
+          if (evalRows[0].resultado !== 'APROBADO') {
+            await client.query(
+              `UPDATE evaluaciones SET resultado='APROBADO', motivo_rechazo=NULL,
+               fecha_evaluacion=NOW() WHERE id=$1`,
+              [evalId]
+            );
+          }
+        } else {
+          // No hay evaluación — crear una automáticamente con los datos de la solicitud
+          const { rows: solData } = await client.query(
+            `SELECT s.salario_mensual_neto, s.historial_crediticio, s.gastos_personales,
+                    s.pago_mensual_deudas, s.monto_solicitado, s.plazo_meses,
+                    s.tipo_credito, s.tipo_nomina,
+                    EXTRACT(EPOCH FROM (s.fecha_baja_estim - s.fecha_ingreso_emp))/31536000 AS antiguedad
+             FROM solicitudes s WHERE s.id=$1`, [id]
+          );
+          if (!solData.length) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
+          }
+          const sd = solData[0];
+          const { evaluar } = require('../services/scoringService');
+          const sc = evaluar({
+            salarioNeto:     parseFloat(sd.salario_mensual_neto),
+            historial:       sd.historial_crediticio,
+            antiguedadAnos:  parseFloat(sd.antiguedad || 0),
+            montoSolicitado: parseFloat(sd.monto_solicitado),
+            plazoMeses:      parseInt(sd.plazo_meses),
+            gastos:          parseFloat(sd.gastos_personales || 0),
+            pagoDeudas:      parseFloat(sd.pago_mensual_deudas || 0),
+            tipoCredito:     sd.tipo_credito,
           });
+          const { rows: newEval } = await client.query(
+            `INSERT INTO evaluaciones
+               (solicitud_id, evaluado_por, puntos_ingreso, puntos_historial,
+                puntos_antiguedad, puntos_capacidad_pago,
+                flujo_disponible_neto, capacidad_de_pago, ratio_capacidad_pago,
+                meses_credito_vs_salario, meses_riesgo_recuperar,
+                ranking, resultado, motivo_rechazo)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'APROBADO',NULL)
+             RETURNING id`,
+            [id, req.user.id,
+             sc.puntos.ingreso, sc.puntos.historial, sc.puntos.antiguedad, sc.puntos.capacidadPago,
+             sc.financiero.flujoDisponible, sc.financiero.capacidadPago, sc.financiero.ratio,
+             sc.financiero.mesesCreditoVsSalario, sc.financiero.mesesRiesgo,
+             sc.ranking]
+          );
+          evalId = newEval[0].id;
         }
-        const evalId = evalRows[0].id;
 
         // Calcular condiciones (usar los del cuerpo del request si el analista las personalizó)
         const montoFinal  = parseFloat(monto_aprobado  || sol.monto_solicitado);
