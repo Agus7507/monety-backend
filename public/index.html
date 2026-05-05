@@ -948,6 +948,14 @@
             </select>
           </div>
           <div class="form-group">
+            <label class="form-label">Área o Departamento</label>
+            <input type="text" class="form-input" id="area" placeholder="Ej. Recursos Humanos">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Puesto Actual</label>
+            <input type="text" class="form-input" id="puesto" placeholder="Ej. Analista de Nómina">
+          </div>
+          <div class="form-group">
             <label class="form-label">Tipo de nómina *</label>
             <select class="form-select" id="tipoNomina">
               <option value="">Selecciona...</option>
@@ -973,7 +981,46 @@
             <input type="number" class="form-input" id="salarioNeto" placeholder="Ej. 8,500" min="0">
           </div>
         </div>
-        <div style="margin-top:24px;">
+
+        <!-- Percepciones variables -->
+        <div style="margin-top:20px; margin-bottom:16px;">
+          <label class="form-label" style="margin-bottom:12px; display:block;">¿Tienes percepciones variables? (bonos, comisiones, etc.)</label>
+          <div class="radio-group">
+            <input type="radio" name="percep" id="percepNo" class="radio-option" value="NO" checked>
+            <label for="percepNo" class="radio-label"><div class="radio-dot"></div>No</label>
+            <input type="radio" name="percep" id="percepSi" class="radio-option" value="SI">
+            <label for="percepSi" class="radio-label"><div class="radio-dot"></div>Sí</label>
+          </div>
+          <div id="percepMonto" style="display:none; margin-top:12px; max-width:280px;">
+            <label class="form-label">Promedio mensual de percepciones variables (MXN)</label>
+            <input type="number" class="form-input" id="percepPromedio" placeholder="Ej. 2,000" min="0">
+          </div>
+        </div>
+
+        <!-- Historial previo con Monety -->
+        <div style="margin-bottom:20px;">
+          <label class="form-label" style="margin-bottom:12px; display:block;">¿Has solicitado previamente un préstamo con Monety?</label>
+          <div class="radio-group">
+            <input type="radio" name="previoMonety" id="prevNo" class="radio-option" value="NO" checked>
+            <label for="prevNo" class="radio-label"><div class="radio-dot"></div>No</label>
+            <input type="radio" name="previoMonety" id="prevSi" class="radio-option" value="SI">
+            <label for="prevSi" class="radio-label"><div class="radio-dot"></div>Sí</label>
+          </div>
+        </div>
+
+        <!-- Autorización descuento -->
+        <div style="margin-bottom:20px;">
+          <label class="form-label" style="margin-bottom:12px; display:block;">¿Autorizas el descuento vía nómina? *</label>
+          <div class="radio-group">
+            <input type="radio" name="autDescuento" id="autSi" class="radio-option" value="SI" checked>
+            <label for="autSi" class="radio-label"><div class="radio-dot"></div>✅ Sí, autorizo</label>
+            <input type="radio" name="autDescuento" id="autNo" class="radio-option" value="NO">
+            <label for="autNo" class="radio-label"><div class="radio-dot"></div>No</label>
+          </div>
+        </div>
+
+        <!-- Historial crediticio -->
+        <div style="margin-bottom:16px;">
           <label class="form-label" style="margin-bottom:12px; display:block;">Historial crediticio aproximado *</label>
           <div class="radio-group">
             <input type="radio" name="historial" id="hExcelente" class="radio-option" value="EXCELENTE">
@@ -986,6 +1033,7 @@
             <label for="hMedio" class="radio-label"><div class="radio-dot"></div>📊 Medio/Bajo (–649)</label>
           </div>
         </div>
+
         <div class="form-footer">
           <button class="btn-back" onclick="nextStep(1)">← Regresar</button>
           <button class="btn-next" onclick="nextStep(3)">
@@ -1024,11 +1072,43 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Gastos personales mensuales (MXN) *</label>
-            <input type="number" class="form-input" id="gastos" placeholder="Ej. 5,000" min="0">
+            <label class="form-label">Gasto mensual en vivienda (MXN)</label>
+            <input type="number" class="form-input" id="gastoVivienda" placeholder="Renta o hipoteca" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gasto mensual en alimentación (MXN)</label>
+            <input type="number" class="form-input" id="gastoAlimentacion" placeholder="Ej. 5,000" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gasto mensual en transporte (MXN)</label>
+            <input type="number" class="form-input" id="gastoTransporte" placeholder="Ej. 1,500" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Otros gastos fijos mensuales (MXN)</label>
+            <input type="number" class="form-input" id="gastoOtros" placeholder="Ej. 2,000" min="0">
           </div>
         </div>
-        <div style="margin-top:24px; margin-bottom:20px;">
+
+        <!-- Dependientes económicos -->
+        <div style="margin-top:20px; margin-bottom:16px;">
+          <label class="form-label" style="margin-bottom:12px; display:block;">¿Tienes personas económicamente dependientes?</label>
+          <div class="radio-group">
+            <input type="radio" name="dependientes" id="depNo" class="radio-option" value="0" checked>
+            <label for="depNo" class="radio-label"><div class="radio-dot"></div>No</label>
+            <input type="radio" name="dependientes" id="depSi" class="radio-option" value="si">
+            <label for="depSi" class="radio-label"><div class="radio-dot"></div>Sí</label>
+          </div>
+          <div id="depCuantos" style="display:none; margin-top:12px; max-width:200px;">
+            <label class="form-label">¿Cuántas personas?</label>
+            <select class="form-select" id="numDependientes">
+              <option value="1">1</option><option value="2">2</option>
+              <option value="3">3</option><option value="4">4</option>
+              <option value="5">5 o más</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
           <label class="form-label" style="margin-bottom:12px; display:block;">¿Tiene otras deudas o créditos activos? *</label>
           <div class="radio-group">
             <input type="radio" name="deudas" id="dNo" class="radio-option" value="NO" checked>
@@ -1175,6 +1255,20 @@
     });
   });
 
+  // SHOW/HIDE PERCEPCIONES
+  document.querySelectorAll('[name="percep"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('percepMonto').style.display = r.value === 'SI' ? 'block' : 'none';
+    });
+  });
+
+  // SHOW/HIDE DEPENDIENTES
+  document.querySelectorAll('[name="dependientes"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('depCuantos').style.display = r.value === 'si' ? 'block' : 'none';
+    });
+  });
+
   // ── SIMULATOR ──
   function calcSimulator() {
     const monto = parseInt(document.getElementById('montoRange').value);
@@ -1316,6 +1410,16 @@
     const tieneDeudas  = document.querySelector('[name="deudas"]:checked')?.value === 'SI';
     const tieneInfo    = document.querySelector('[name="infonavit"]:checked')?.value === 'SI';
 
+    // Calcular gastos totales sumando los desglosados
+    const gastoVivienda     = parseFloat(g('gastoVivienda'))     || 0;
+    const gastoAlimentacion = parseFloat(g('gastoAlimentacion')) || 0;
+    const gastoTransporte   = parseFloat(g('gastoTransporte'))   || 0;
+    const gastoOtros        = parseFloat(g('gastoOtros'))        || 0;
+    const gastosTotal       = gastoVivienda + gastoAlimentacion + gastoTransporte + gastoOtros;
+
+    const depVal = document.querySelector('[name="dependientes"]:checked')?.value || '0';
+    const numDep = depVal === 'si' ? parseInt(g('numDependientes') || '0') : 0;
+
     const payload = {
       // Personales
       nombres:      g('nombres'),
@@ -1340,11 +1444,20 @@
       salarioBruto:     parseFloat(g('salarioBruto')) || 0,
       salarioNeto:      parseFloat(g('salarioNeto'))  || 0,
       historialCrediticio,
+      // Campos extra del cuestionario
+      area:             g('area')   || undefined,
+      puesto:           g('puesto') || undefined,
+      tienePercepVariables: document.querySelector('[name="percep"]:checked')?.value === 'SI',
+      percepcionesVariables: parseFloat(g('percepPromedio')) || 0,
+      previoMonety: document.querySelector('[name="previoMonety"]:checked')?.value === 'SI',
+      autorizaDescuento: document.querySelector('[name="autDescuento"]:checked')?.value === 'SI',
+      numDependientes: numDep,
       // Crédito
       tipoCredito:      g('tipoCredForm'),
       montoSolicitado:  parseFloat(g('montoForm'))  || 0,
       plazoMeses:       parseInt(g('plazoForm'))     || 12,
-      gastos:           parseFloat(g('gastos'))      || 0,
+      gastos:           gastosTotal,
+      gastoVivienda, gastoAlimentacion, gastoTransporte, gastoOtros,
       tieneDeudas,
       tipoDeuda:        tieneDeudas ? g('tipoDeuda') : undefined,
       pagoMensualDeudas:tieneDeudas ? parseFloat(g('pagoDeudas')) || 0 : 0,
