@@ -2170,8 +2170,11 @@ async function aprobarConPropuesta() {
     });
     toast(`✅ ${folio} aprobada y crédito creado automáticamente`, 'success');
     $('simAprobarWrap').style.display = 'none';
-    // Refrescar solicitudes
+    // Refrescar lista de solicitudes
     loadSolicitudes();
+    // Reabrir el panel de detalle para mostrar los botones Carta y Contrato
+    closeDetail();
+    setTimeout(() => openDetail(solId, folio), 400);
   } catch (err) {
     toast(`Error al aprobar: ${err.message}`, 'error');
   }

@@ -1340,7 +1340,7 @@
         <div><span style="color:var(--gray-light)">Edad</span><br><strong>${g('edad')} años</strong></div>
         <div><span style="color:var(--gray-light)">Email</span><br><strong>${g('email')}</strong></div>
         <div><span style="color:var(--gray-light)">Teléfono</span><br><strong>${g('telefono')}</strong></div>
-        <div><span style="color:var(--gray-light)">Empresa</span><br><strong>${g('empresa')}</strong></div>
+        <div><span style="color:var(--gray-light)">Empresa</span><br><strong>${document.getElementById('empresa')?.options[document.getElementById('empresa')?.selectedIndex]?.text || '—'}</strong></div>
         <div><span style="color:var(--gray-light)">Nómina</span><br><strong>${g('tipoNomina')}</strong></div>
         <div><span style="color:var(--gray-light)">Salario bruto mensual</span><br><strong>$${parseInt(g('salarioBruto')||0).toLocaleString('es-MX')}</strong></div>
         <div><span style="color:var(--gray-light)">Historial crediticio</span><br><strong>${document.querySelector('[name="historial"]:checked')?.value || '—'}</strong></div>
