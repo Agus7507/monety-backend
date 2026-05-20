@@ -805,7 +805,7 @@
     <p class="section-sub" style="margin:0 auto;">Completa el formulario en menos de 10 minutos. Sin papeleos, sin filas.</p>
   </div>
   <div class="form-wrapper">
-    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:25%"></div></div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:20%"></div></div>
     <div class="form-steps-bar">
       <div class="form-step-indicator" onclick="goToStep(1)">
         <div class="form-step-circle active" id="stepCircle1">1</div>
@@ -835,6 +835,14 @@
         <div class="form-step-circle" id="stepCircle4">4</div>
         <div class="form-step-info">
           <div class="form-step-num">PASO 4</div>
+          <div class="form-step-name">Documentos</div>
+        </div>
+      </div>
+      <div class="form-step-line"></div>
+      <div class="form-step-indicator" onclick="goToStep(5)">
+        <div class="form-step-circle" id="stepCircle5">5</div>
+        <div class="form-step-info">
+          <div class="form-step-num">PASO 5</div>
           <div class="form-step-name">Confirmación</div>
         </div>
       </div>
@@ -1154,8 +1162,139 @@
         </div>
       </div>
 
-      <!-- STEP 4: Review & Submit -->
+      <!-- STEP 4: Documentos -->
       <div class="form-page" id="page4">
+        <div class="form-page-title">📎 Documentos requeridos</div>
+        <p class="form-page-sub">Sube tus documentos en formato JPG, PNG o PDF. Máximo 10 MB por archivo.</p>
+
+        <style>
+          .doc-upload-item {
+            border: 2px dashed #e2e8f0; border-radius: 14px; padding: 18px 20px;
+            margin-bottom: 14px; transition: border-color .2s, background .2s;
+            display: flex; align-items: center; gap: 16px; cursor: pointer;
+          }
+          .doc-upload-item:hover { border-color: var(--teal); background: var(--teal-light); }
+          .doc-upload-item.uploaded { border-color: var(--teal); background: var(--teal-light); border-style: solid; }
+          .doc-icon { font-size: 28px; flex-shrink: 0; }
+          .doc-info { flex: 1; }
+          .doc-title { font-weight: 700; font-size: 14px; color: var(--gray-dark); margin-bottom: 3px; }
+          .doc-sub   { font-size: 12px; color: var(--gray-light); }
+          .doc-status { font-size: 12px; font-weight: 600; color: var(--teal); margin-top: 4px; }
+          .doc-badge-req { background: #fff3ee; color: #c53030; font-size: 10px; font-weight: 700;
+            padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
+          .doc-badge-opt { background: #f7fafa; color: var(--gray-light); font-size: 10px; font-weight: 700;
+            padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
+          .doc-upload-input { display: none; }
+          .doc-check { font-size: 22px; color: var(--teal); flex-shrink: 0; display: none; }
+          .doc-upload-item.uploaded .doc-check { display: block; }
+        </style>
+
+        <div id="docUploadList">
+          <!-- INE Frente -->
+          <label class="doc-upload-item" id="docItem_INE_FRENTE" for="docInput_INE_FRENTE">
+            <div class="doc-icon">🪪</div>
+            <div class="doc-info">
+              <div class="doc-title">INE / IFE — Frente</div>
+              <div class="doc-sub">Foto o escáner de la parte delantera de tu identificación oficial</div>
+              <div class="doc-status" id="docStatus_INE_FRENTE">Toca para seleccionar archivo</div>
+            </div>
+            <span class="doc-badge-req">Requerido</span>
+            <span class="doc-check">✅</span>
+            <input class="doc-upload-input" type="file" id="docInput_INE_FRENTE"
+              accept=".jpg,.jpeg,.png,.pdf" onchange="onDocSelected(this,'INE_FRENTE')">
+          </label>
+
+          <!-- INE Reverso -->
+          <label class="doc-upload-item" id="docItem_INE_REVERSO" for="docInput_INE_REVERSO">
+            <div class="doc-icon">🪪</div>
+            <div class="doc-info">
+              <div class="doc-title">INE / IFE — Reverso</div>
+              <div class="doc-sub">Foto o escáner de la parte trasera de tu identificación oficial</div>
+              <div class="doc-status" id="docStatus_INE_REVERSO">Toca para seleccionar archivo</div>
+            </div>
+            <span class="doc-badge-req">Requerido</span>
+            <span class="doc-check">✅</span>
+            <input class="doc-upload-input" type="file" id="docInput_INE_REVERSO"
+              accept=".jpg,.jpeg,.png,.pdf" onchange="onDocSelected(this,'INE_REVERSO')">
+          </label>
+
+          <!-- Comprobante domicilio -->
+          <label class="doc-upload-item" id="docItem_COMPROBANTE_DOMICILIO" for="docInput_COMPROBANTE_DOMICILIO">
+            <div class="doc-icon">🏠</div>
+            <div class="doc-info">
+              <div class="doc-title">Comprobante de domicilio</div>
+              <div class="doc-sub">Recibo de agua, luz, gas o teléfono (máximo 3 meses de antigüedad)</div>
+              <div class="doc-status" id="docStatus_COMPROBANTE_DOMICILIO">Toca para seleccionar archivo</div>
+            </div>
+            <span class="doc-badge-req">Requerido</span>
+            <span class="doc-check">✅</span>
+            <input class="doc-upload-input" type="file" id="docInput_COMPROBANTE_DOMICILIO"
+              accept=".jpg,.jpeg,.png,.pdf" onchange="onDocSelected(this,'COMPROBANTE_DOMICILIO')">
+          </label>
+
+          <!-- Recibo nómina -->
+          <label class="doc-upload-item" id="docItem_RECIBO_NOMINA" for="docInput_RECIBO_NOMINA">
+            <div class="doc-icon">💼</div>
+            <div class="doc-info">
+              <div class="doc-title">Recibo de nómina</div>
+              <div class="doc-sub">Último recibo de nómina completo (puede ser digital o físico escaneado)</div>
+              <div class="doc-status" id="docStatus_RECIBO_NOMINA">Toca para seleccionar archivo</div>
+            </div>
+            <span class="doc-badge-req">Requerido</span>
+            <span class="doc-check">✅</span>
+            <input class="doc-upload-input" type="file" id="docInput_RECIBO_NOMINA"
+              accept=".jpg,.jpeg,.png,.pdf" onchange="onDocSelected(this,'RECIBO_NOMINA')">
+          </label>
+
+          <!-- CURP (opcional) -->
+          <label class="doc-upload-item" id="docItem_CURP" for="docInput_CURP">
+            <div class="doc-icon">📄</div>
+            <div class="doc-info">
+              <div class="doc-title">CURP</div>
+              <div class="doc-sub">Documento oficial de CURP (obtenible en gob.mx)</div>
+              <div class="doc-status" id="docStatus_CURP">Toca para seleccionar archivo</div>
+            </div>
+            <span class="doc-badge-opt">Opcional</span>
+            <span class="doc-check">✅</span>
+            <input class="doc-upload-input" type="file" id="docInput_CURP"
+              accept=".jpg,.jpeg,.png,.pdf" onchange="onDocSelected(this,'CURP')">
+          </label>
+
+          <!-- Estado de cuenta (opcional) -->
+          <label class="doc-upload-item" id="docItem_ESTADO_CUENTA" for="docInput_ESTADO_CUENTA">
+            <div class="doc-icon">🏦</div>
+            <div class="doc-info">
+              <div class="doc-title">Estado de cuenta bancario</div>
+              <div class="doc-sub">Últimos 3 meses (para acreditar cuenta receptora del préstamo)</div>
+              <div class="doc-status" id="docStatus_ESTADO_CUENTA">Toca para seleccionar archivo</div>
+            </div>
+            <span class="doc-badge-opt">Opcional</span>
+            <span class="doc-check">✅</span>
+            <input class="doc-upload-input" type="file" id="docInput_ESTADO_CUENTA"
+              accept=".jpg,.jpeg,.png,.pdf" onchange="onDocSelected(this,'ESTADO_CUENTA')">
+          </label>
+        </div>
+
+        <div id="docUploadProgress" style="display:none;background:var(--teal-light);border-radius:12px;padding:14px 18px;margin-top:12px;border:1px solid var(--teal-mid);">
+          <div style="font-size:13px;font-weight:600;color:var(--teal);margin-bottom:6px">⏳ Subiendo documentos...</div>
+          <div id="docUploadMsg" style="font-size:12px;color:var(--gray);"></div>
+        </div>
+
+        <div id="docReqMsg" style="display:none;background:#fff5f5;border-radius:10px;padding:12px 16px;margin-top:12px;border-left:4px solid #f85149;">
+          <div style="font-size:13px;font-weight:600;color:#c53030;">📋 Documentos requeridos faltantes:</div>
+          <div id="docReqList" style="font-size:12px;color:var(--gray);margin-top:4px;"></div>
+        </div>
+
+        <div class="form-footer">
+          <button class="btn-back" onclick="nextStep(3)">← Regresar</button>
+          <button class="btn-next" onclick="nextStep(5)">
+            Continuar <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 5: Review & Submit (era 4) -->
+      <div class="form-page" id="page5">
         <div class="form-page-title">✅ Confirma tu solicitud</div>
         <p class="form-page-sub">Revisa tu información antes de enviar. Nos pondremos en contacto contigo en menos de 24 horas.</p>
         <div id="summaryBox" style="background:var(--gray-bg); border-radius:16px; padding:28px; margin-bottom:24px; line-height:2;"></div>
@@ -1171,7 +1310,7 @@
           </label>
         </div>
         <div class="form-footer">
-          <button class="btn-back" onclick="nextStep(3)">← Regresar</button>
+          <button class="btn-back" onclick="nextStep(4)">← Regresar</button>
           <button class="btn-next" onclick="submitForm()" id="submitBtn">
             🚀 Enviar solicitud
           </button>
@@ -1304,15 +1443,79 @@
 
   // ── MULTI-STEP FORM ──
   let currentStep = 1;
-  const totalSteps = 4;
+  const totalSteps = 5;
+
+  // Archivos de documentos seleccionados (tipo → File)
+  const docFiles = {};
+  const DOCS_REQUERIDOS_SITIO = ['INE_FRENTE', 'INE_REVERSO', 'COMPROBANTE_DOMICILIO', 'RECIBO_NOMINA'];
+
+  function onDocSelected(input, tipo) {
+    const file = input.files[0];
+    if (!file) return;
+    const maxMB = 10;
+    if (file.size > maxMB * 1024 * 1024) {
+      alert(`El archivo es muy grande. Máximo ${maxMB} MB.`);
+      input.value = '';
+      return;
+    }
+    docFiles[tipo] = file;
+    const item = document.getElementById(`docItem_${tipo}`);
+    const status = document.getElementById(`docStatus_${tipo}`);
+    if (item)   item.classList.add('uploaded');
+    if (status) status.textContent = `✓ ${file.name} (${(file.size/1024).toFixed(0)} KB)`;
+    // Ocultar mensaje de requeridos si ya están todos
+    const faltantes = DOCS_REQUERIDOS_SITIO.filter(t => !docFiles[t]);
+    if (!faltantes.length) document.getElementById('docReqMsg').style.display = 'none';
+  }
+
+  async function subirDocumentos(solicitudId) {
+    const tipos = Object.keys(docFiles);
+    if (!tipos.length) return; // sin documentos, continuar
+
+    document.getElementById('docUploadProgress').style.display = 'block';
+
+    for (const tipo of tipos) {
+      const file = docFiles[tipo];
+      const msg  = document.getElementById('docUploadMsg');
+      if (msg) msg.textContent = `Subiendo ${tipo.replace(/_/g,' ')}...`;
+
+      const formData = new FormData();
+      formData.append('archivos', file, file.name);
+      formData.append('tipo', tipo);
+
+      try {
+        await fetch(`${API_BASE}/expediente/${solicitudId}/subir`, {
+          method: 'POST',
+          body:   formData,
+          // NO poner Content-Type: multer lo detecta solo
+        });
+      } catch {
+        // No bloquear el flujo si un documento falla
+        console.warn(`Error subiendo ${tipo}`);
+      }
+    }
+
+    document.getElementById('docUploadProgress').style.display = 'none';
+  }
 
   function nextStep(step) {
+    // Validar documentos requeridos al salir del paso 4
+    if (currentStep === 4 && step === 5) {
+      const faltantes = DOCS_REQUERIDOS_SITIO.filter(t => !docFiles[t])
+        .map(t => ({ INE_FRENTE:'INE Frente', INE_REVERSO:'INE Reverso',
+                     COMPROBANTE_DOMICILIO:'Comprobante de domicilio',
+                     RECIBO_NOMINA:'Recibo de nómina' }[t]));
+      if (faltantes.length) {
+        document.getElementById('docReqMsg').style.display = 'block';
+        document.getElementById('docReqList').textContent = 'Faltan: ' + faltantes.join(', ');
+        return;
+      }
+    }
     document.getElementById('page' + currentStep).classList.remove('active');
     currentStep = step;
     document.getElementById('page' + step).classList.add('active');
     updateStepUI();
-    if (step === 4) buildSummary();
-    // Scroll al inicio del form, no de la sección completa
+    if (step === 5) buildSummary();
     document.getElementById('page' + step).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -1323,31 +1526,36 @@
   function updateStepUI() {
     const pct = (currentStep / totalSteps) * 100;
     document.getElementById('progressFill').style.width = pct + '%';
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= totalSteps; i++) {
       const c = document.getElementById('stepCircle' + i);
+      if (!c) continue;
       c.className = 'form-step-circle';
-      if (i < currentStep) c.classList.add('done'), c.textContent = '✓';
-      else if (i === currentStep) c.classList.add('active'), c.textContent = i;
-      else c.textContent = i;
+      if (i < currentStep)       { c.classList.add('done');   c.textContent = '✓'; }
+      else if (i === currentStep){ c.classList.add('active'); c.textContent = i;   }
+      else                        { c.textContent = i; }
     }
   }
 
   function buildSummary() {
-    const g = (id) => document.getElementById(id)?.value || '—';
+    const g = id => (document.getElementById(id)?.value || '—');
+    const empSel   = document.getElementById('empresa');
+    const empNombre= empSel?.options[empSel?.selectedIndex]?.text || '—';
+    const docCount = Object.keys(docFiles).length;
     const html = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 32px;font-size:14px;">
         <div><span style="color:var(--gray-light)">Nombre completo</span><br><strong>${g('nombres')} ${g('apellidoPat')} ${g('apellidoMat')}</strong></div>
         <div><span style="color:var(--gray-light)">Edad</span><br><strong>${g('edad')} años</strong></div>
         <div><span style="color:var(--gray-light)">Email</span><br><strong>${g('email')}</strong></div>
         <div><span style="color:var(--gray-light)">Teléfono</span><br><strong>${g('telefono')}</strong></div>
-        <div><span style="color:var(--gray-light)">Empresa</span><br><strong>${document.getElementById('empresa')?.options[document.getElementById('empresa')?.selectedIndex]?.text || '—'}</strong></div>
+        <div><span style="color:var(--gray-light)">Empresa</span><br><strong>${empNombre}</strong></div>
         <div><span style="color:var(--gray-light)">Nómina</span><br><strong>${g('tipoNomina')}</strong></div>
-        <div><span style="color:var(--gray-light)">Salario bruto mensual</span><br><strong>$${parseInt(g('salarioBruto')||0).toLocaleString('es-MX')}</strong></div>
+        <div><span style="color:var(--gray-light)">Salario bruto</span><br><strong>$${parseInt(g('salarioBruto')||0).toLocaleString('es-MX')}</strong></div>
         <div><span style="color:var(--gray-light)">Historial crediticio</span><br><strong>${document.querySelector('[name="historial"]:checked')?.value || '—'}</strong></div>
         <div><span style="color:var(--gray-light)">Tipo de crédito</span><br><strong>${g('tipoCredForm')}</strong></div>
         <div><span style="color:var(--gray-light)">Monto solicitado</span><br><strong>$${parseInt(g('montoForm')||0).toLocaleString('es-MX')}</strong></div>
         <div><span style="color:var(--gray-light)">Plazo</span><br><strong>${g('plazoForm')} meses</strong></div>
         <div><span style="color:var(--gray-light)">Tiene deudas</span><br><strong>${document.querySelector('[name="deudas"]:checked')?.value || '—'}</strong></div>
+        <div><span style="color:var(--gray-light)">Documentos adjuntos</span><br><strong style="color:var(--teal)">${docCount} archivo(s) ✓</strong></div>
       </div>`;
     document.getElementById('summaryBox').innerHTML = html;
   }
@@ -1483,9 +1691,24 @@
         return;
       }
 
-      // ── Éxito: mostrar folio real de la BD ──
-      for (let i = 1; i <= 4; i++) {
-        document.getElementById('page' + i).classList.remove('active');
+      // ── Éxito: subir documentos y mostrar folio ──
+      btn.textContent = '⏳ Subiendo documentos...';
+
+      // Subir los documentos adjuntos al expediente
+      if (data.solicitudId || data.folio) {
+        // Necesitamos el UUID — lo obtenemos del folio
+        try {
+          const solResp = await fetch(`${API_BASE}/solicitudes/estado/${data.folio}`);
+          const solData = await solResp.json();
+          if (solData.ok && solData.solicitud?.id) {
+            await subirDocumentos(solData.solicitud.id);
+          }
+        } catch { /* no bloquear */ }
+      }
+
+      for (let i = 1; i <= 5; i++) {
+        const p = document.getElementById('page' + i);
+        if (p) p.classList.remove('active');
       }
       document.getElementById('folioNum').textContent = data.folio;
 
@@ -1524,6 +1747,10 @@
     currentStep = 1;
     document.getElementById('page1').classList.add('active');
     updateStepUI();
+    // Limpiar documentos
+    Object.keys(docFiles).forEach(k => delete docFiles[k]);
+    document.querySelectorAll('.doc-upload-item').forEach(el => el.classList.remove('uploaded'));
+    document.querySelectorAll('[id^="docStatus_"]').forEach(el => el.textContent = 'Toca para seleccionar archivo');
   }
 </script>
 </body>

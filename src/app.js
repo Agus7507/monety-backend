@@ -104,6 +104,7 @@ app.use(`${PREFIX}/creditos`,    require('./routes/creditos'));
 app.use(`${PREFIX}/dashboard`,   require('./routes/dashboard'));
 app.use(`${PREFIX}/documentos`,  require('./routes/documentos'));
 app.use(`${PREFIX}/layouts`,     require('./routes/layouts'));
+app.use(`${PREFIX}/expediente`,  require('./routes/expediente'));
 
 /* ── 404 ──────────────────────────────────────────────────── */
 app.use((_req, res) => {

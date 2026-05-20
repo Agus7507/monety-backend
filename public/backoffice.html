@@ -1087,6 +1087,7 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
     <div class="detail-tabs">
       <div class="detail-tab active" onclick="switchTab('main', this)">📋 Principal</div>
       <div class="detail-tab" onclick="switchTab('extra', this)">📄 Datos adicionales</div>
+      <div class="detail-tab" onclick="switchTab('docs', this)" id="docsTab">📎 Expediente</div>
       <div class="detail-tab" onclick="switchTab('amort', this)">📊 Amortización</div>
       <div class="detail-tab" onclick="switchTab('estado', this)">🔄 Estado</div>
     </div>
@@ -1619,6 +1620,10 @@ function switchTab(tab, el) {
   if (el) el.classList.add('active');
   const content = document.getElementById(`dtab-${tab}`);
   if (content) content.classList.add('active');
+  // Carga el expediente cuando se abre la pestaña por primera vez
+  if (tab === 'docs' && currentSolId) {
+    loadExpediente(currentSolId);
+  }
 }
 
 function closeDetail(e) {
@@ -1782,6 +1787,31 @@ async function loadDetailData(id, folio) {
       </div>
     </div>
 
+    <!-- TAB: Expediente digital -->
+    <div class="detail-tab-content" id="dtab-docs" style="padding:20px 24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-2)">Documentos del solicitante</div>
+        <label class="btn-sm ghost" style="cursor:pointer;display:flex;align-items:center;gap:6px;" for="backofficeDocInput">
+          ⬆ Subir documento
+          <input type="file" id="backofficeDocInput" accept=".jpg,.jpeg,.png,.pdf" style="display:none"
+            onchange="subirDesdeBackoffice(this)">
+        </label>
+      </div>
+      <!-- Selector de tipo -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="docTipoSelector">
+        ${['INE_FRENTE','INE_REVERSO','CURP','COMPROBANTE_DOMICILIO','RECIBO_NOMINA','ESTADO_CUENTA','OTRO'].map(t =>
+          `<button class="plazo-btn${t==='INE_FRENTE'?' active':''}" data-tipo="${t}" onclick="selectDocTipo(this)"
+            style="font-size:11px;padding:5px 10px">${t.replace(/_/g,' ')}</button>`
+        ).join('')}
+      </div>
+      <!-- Checklist -->
+      <div id="docChecklist" style="margin-bottom:16px;"></div>
+      <!-- Lista de documentos -->
+      <div id="docListContainer">
+        <div class="empty-state"><div class="loader"></div></div>
+      </div>
+    </div>
+
     <!-- TAB: Amortización -->
     <div class="detail-tab-content" id="dtab-amort" style="padding:20px 24px;">
       <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
@@ -1816,6 +1846,31 @@ async function loadDetailData(id, folio) {
           <button class="estado-btn${sol.estado===e?' selected':''}" onclick="cambiarEstado('${currentSolId}','${e}',this)">${ESTADO_LABELS[e]?.[1]||e}</button>
         `).join('')}
       </div>
+
+      <!-- Campos adicionales al aprobar -->
+      <div id="camposAprobacion" style="display:${sol.estado==='APROBADA'?'none':'block'};margin-top:14px;">
+        <div style="background:var(--teal-dim);border-radius:10px;padding:14px 16px;border:1px solid rgba(27,168,150,.3);margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:600;color:var(--teal);margin-bottom:10px;">📅 Configuración al aprobar</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Fecha desembolso</label>
+              <input type="date" id="aprobFechaDesembolso"
+                value="${new Date().toISOString().slice(0,10)}"
+                style="width:100%;padding:8px 10px;background:var(--bg-raised);border:1.5px solid var(--border);border-radius:8px;color:var(--text-1);font-size:13px;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Inicio descuento nómina</label>
+              <input type="date" id="aprobFechaInicioDesc"
+                value="${(() => { const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+1); return d.toISOString().slice(0,10); })()}"
+                style="width:100%;padding:8px 10px;background:var(--bg-raised);border:1.5px solid var(--border);border-radius:8px;color:var(--text-1);font-size:13px;">
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:8px">
+            💡 La fecha de inicio de descuento determina en qué periodo aparece el crédito en el layout de nómina.
+          </div>
+        </div>
+      </div>
+
       <textarea id="comentarioEstado" placeholder="Comentario (opcional)..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-raised);border:1.5px solid var(--border);color:var(--text-1);font-size:13px;resize:vertical;min-height:70px;margin-bottom:12px;margin-top:12px"></textarea>
       <button class="btn-sm primary" style="width:100%;padding:12px;" onclick="guardarEstado('${currentSolId}')">Guardar cambio de estado</button>
 
@@ -1832,30 +1887,55 @@ function cambiarEstado(id, estado, btn) {
   document.querySelectorAll('.estado-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
   selectedEstado = estado;
+  // Mostrar campos de aprobación solo cuando se selecciona APROBADA
+  const camposDiv = $('camposAprobacion');
+  if (camposDiv) camposDiv.style.display = estado === 'APROBADA' ? 'block' : 'none';
 }
 
 async function guardarEstado(id) {
   if (!selectedEstado) { toast('Selecciona un estado primero', 'info'); return; }
-  const comentario = $('comentarioEstado')?.value || '';
-  const btn = document.querySelector('.detail-body .btn-sm.primary') ||
-              document.querySelector('[onclick^="guardarEstado"]');
+  const comentario      = $('comentarioEstado')?.value || '';
+  const fechaDesembolso = $('aprobFechaDesembolso')?.value || null;
+  const fechaInicioDesc = $('aprobFechaInicioDesc')?.value || null;
 
+  const body = { estado: selectedEstado, comentario };
+
+  // Solo enviar fechas si se está aprobando
+  if (selectedEstado === 'APROBADA') {
+    if (fechaDesembolso) body.fecha_desembolso        = fechaDesembolso;
+    if (fechaInicioDesc) body.fecha_inicio_descuento  = fechaInicioDesc;
+  }
+
+  const btn = document.querySelector('#dtab-estado .btn-sm.primary');
   try {
     if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
 
     await apiFetch(`/solicitudes/${id}/estado`, {
       method: 'PATCH',
-      body: JSON.stringify({ estado: selectedEstado, comentario }),
+      body:   JSON.stringify(body),
     });
 
-    toast(`✅ Estado actualizado: ${ESTADO_LABELS[selectedEstado]?.[1] || selectedEstado}`, 'success');
+    const lbl = ESTADO_LABELS[selectedEstado]?.[1] || selectedEstado;
+    toast(`✅ Estado actualizado: ${lbl}`, 'success');
+
+    // Si se aprobó, generar el layout del mes actual automáticamente
+    if (selectedEstado === 'APROBADA' && fechaInicioDesc) {
+      const periodoInicio = fechaInicioDesc.slice(0, 7); // YYYY-MM
+      try {
+        await apiFetch('/layouts/generar', {
+          method: 'POST',
+          body:   JSON.stringify({ periodo: periodoInicio, tipo: 'DESCUENTO' }),
+        });
+        toast(`📋 Layout de ${periodoInicio} generado automáticamente`, 'info');
+      } catch { /* no bloquear si falla el layout */ }
+    }
+
     closeDetail();
-    // Recargar lista y dashboard
     loadSolicitudes();
     if (document.getElementById('page-dashboard').classList.contains('active')) loadDashboard();
   } catch (err) {
     toast(`Error: ${err.message}`, 'error');
-    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambio'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambio de estado'; }
   }
 }
 
@@ -2155,24 +2235,41 @@ async function aprobarConPropuesta() {
   const tasa  = parseFloat($('simTasa')?.value || 4.3) / 100;
   const comentario = `Condiciones personalizadas por analista: $${monto.toLocaleString('es-MX')} a ${simPlazo} meses, tasa ${(tasa*100).toFixed(1)}% mensual`;
 
-  if (!confirm(`¿Aprobar ${folio} con las condiciones del simulador?\n\nMonto: $${monto.toLocaleString('es-MX')}\nPlazo: ${simPlazo} meses\nTasa: ${(tasa*100).toFixed(1)}% mensual`)) return;
+  // Calcular fecha inicio descuento = primer día del mes siguiente
+  const hoy = new Date();
+  const fechaDesembolso = hoy.toISOString().slice(0,10);
+  const inicioDesc = new Date(hoy.getFullYear(), hoy.getMonth()+1, 1);
+  const fechaInicioDesc = inicioDesc.toISOString().slice(0,10);
+
+  if (!confirm(`¿Aprobar ${folio} con las condiciones del simulador?\n\nMonto: $${monto.toLocaleString('es-MX')}\nPlazo: ${simPlazo} meses\nTasa: ${(tasa*100).toFixed(1)}% mensual\nInicio descuento: ${fechaInicioDesc}`)) return;
 
   try {
     const d = await apiFetch(`/solicitudes/${solId}/estado`, {
       method: 'PATCH',
       body: JSON.stringify({
-        estado:               'APROBADA',
+        estado:                'APROBADA',
         comentario,
-        monto_aprobado:       monto,
-        plazo_meses:          simPlazo,
-        tasa_nominal_mensual: tasa,
+        monto_aprobado:        monto,
+        plazo_meses:           simPlazo,
+        tasa_nominal_mensual:  tasa,
+        fecha_desembolso:      fechaDesembolso,
+        fecha_inicio_descuento: fechaInicioDesc,
       }),
     });
+
+    // Generar layout del mes de inicio automáticamente
+    const periodoInicio = fechaInicioDesc.slice(0, 7);
+    try {
+      await apiFetch('/layouts/generar', {
+        method: 'POST',
+        body: JSON.stringify({ periodo: periodoInicio, tipo: 'DESCUENTO' }),
+      });
+      toast(`📋 Layout de ${periodoInicio} generado automáticamente`, 'info');
+    } catch { /* no bloquear */ }
+
     toast(`✅ ${folio} aprobada y crédito creado automáticamente`, 'success');
     $('simAprobarWrap').style.display = 'none';
-    // Refrescar lista de solicitudes
     loadSolicitudes();
-    // Reabrir el panel de detalle para mostrar los botones Carta y Contrato
     closeDetail();
     setTimeout(() => openDetail(solId, folio), 400);
   } catch (err) {
@@ -2668,6 +2765,149 @@ function generarLayoutHTML() {
   const win = window.open('', '_blank');
   if (win) { win.document.open(); win.document.write(html); win.document.close(); }
   else toast('Permite ventanas emergentes para exportar', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════
+   EXPEDIENTE DIGITAL
+══════════════════════════════════════════════════════════ */
+let selectedDocTipo = 'INE_FRENTE';
+
+function selectDocTipo(btn) {
+  document.querySelectorAll('#docTipoSelector .plazo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedDocTipo = btn.dataset.tipo;
+}
+
+async function loadExpediente(solicitudId) {
+  const container = $('docListContainer');
+  const checklist = $('docChecklist');
+  if (!container) return;
+  container.innerHTML = '<div class="empty-state"><div class="loader"></div></div>';
+
+  try {
+    const d = await apiFetch(`/expediente/${solicitudId}`);
+    const docs = d.documentos || [];
+    const ck   = d.checklist  || [];
+    const res  = d.resumen    || {};
+
+    // Checklist
+    if (checklist) {
+      checklist.innerHTML = `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          ${ck.map(item => `
+            <div style="display:flex;align-items:center;gap:5px;background:${item.subido?(item.verificado?'rgba(63,185,80,.12)':'rgba(27,168,150,.1)'):'rgba(248,81,73,.08)'};
+              padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;
+              color:${item.subido?(item.verificado?'var(--green)':'var(--teal)'):'var(--red)'}">
+              ${item.subido?(item.verificado?'✅':'📄'):'❌'} ${item.label}
+              ${item.requerido?'<span style="opacity:.6">(req)</span>':''}
+            </div>`).join('')}
+        </div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:4px">
+          ${res.completo?'<span style="color:var(--green)">✓ Expediente completo</span>':'<span style="color:var(--amber)">⚠️ Faltan documentos requeridos</span>'}
+          · ${res.verificados||0}/${res.total||0} verificados
+        </div>`;
+    }
+
+    // Lista de documentos
+    if (!docs.length) {
+      container.innerHTML = `<div class="empty-state">
+        <div class="es-icon">📭</div>
+        <div class="es-text">Sin documentos — sube los archivos del solicitante</div>
+      </div>`;
+      return;
+    }
+
+    const TIPO_ICONS = { INE_FRENTE:'🪪', INE_REVERSO:'🪪', CURP:'📄', RFC:'📄',
+      COMPROBANTE_DOMICILIO:'🏠', COMPROBANTE_INGRESOS:'💰', RECIBO_NOMINA:'💼',
+      ESTADO_CUENTA:'🏦', CONTRATO_LABORAL:'📋', CONTRATO_CREDITO:'📋', OTRO:'📎' };
+
+    container.innerHTML = docs.map(doc => `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">
+        <div style="font-size:24px;flex-shrink:0">${TIPO_ICONS[doc.tipo]||'📎'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px">${doc.tipo.replace(/_/g,' ')}</div>
+          <div style="font-size:13px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc.nombre_archivo}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">${(doc.tamanio_bytes/1024).toFixed(0)} KB · ${fmtDate(doc.created_at)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-items:flex-end;">
+          <button class="btn-sm ghost" style="font-size:11px;padding:4px 10px;"
+            onclick="verDocumento('${currentSolId}','${doc.id}','${doc.mime_type}')">👁 Ver</button>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;color:${doc.verificado?'var(--green)':'var(--text-2)'}">
+            <input type="checkbox" ${doc.verificado?'checked':''} style="accent-color:var(--teal)"
+              onchange="verificarDoc('${currentSolId}','${doc.id}',this.checked)">
+            ${doc.verificado?'✓ Verificado':'Verificar'}
+          </label>
+          <button class="btn-sm ghost" style="font-size:11px;padding:4px 10px;color:var(--red);"
+            onclick="eliminarDoc('${currentSolId}','${doc.id}')">🗑</button>
+        </div>
+      </div>`).join('');
+
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="es-icon">⚠️</div>
+      <div class="es-text" style="color:var(--red)">${err.message}</div>
+    </div>`;
+  }
+}
+
+async function verDocumento(solicitudId, docId, mimeType) {
+  try {
+    const d = await apiFetch(`/expediente/${solicitudId}/${docId}/ver`);
+    if (mimeType === 'application/pdf') {
+      window.open(d.url, '_blank');
+    } else {
+      // Abrir imagen en ventana emergente
+      const win = window.open('', '_blank', 'width=900,height=700');
+      win.document.write(`<html><body style="margin:0;background:#000">
+        <img src="${d.url}" style="max-width:100%;max-height:100vh;display:block;margin:auto">
+      </body></html>`);
+    }
+  } catch (err) { toast(`Error: ${err.message}`, 'error'); }
+}
+
+async function verificarDoc(solicitudId, docId, verificado) {
+  try {
+    await apiFetch(`/expediente/${solicitudId}/${docId}/verificar`, {
+      method: 'PATCH',
+      body:   JSON.stringify({ verificado }),
+    });
+    toast(verificado ? '✅ Documento verificado' : 'Verificación removida', 'success');
+    loadExpediente(solicitudId);
+  } catch (err) { toast(`Error: ${err.message}`, 'error'); }
+}
+
+async function eliminarDoc(solicitudId, docId) {
+  if (!confirm('¿Eliminar este documento? Esta acción no se puede deshacer.')) return;
+  try {
+    await apiFetch(`/expediente/${solicitudId}/${docId}`, { method: 'DELETE' });
+    toast('🗑 Documento eliminado', 'success');
+    loadExpediente(solicitudId);
+  } catch (err) { toast(`Error: ${err.message}`, 'error'); }
+}
+
+async function subirDesdeBackoffice(input) {
+  const file = input.files[0];
+  if (!file || !currentSolId) return;
+
+  const formData = new FormData();
+  formData.append('archivos', file, file.name);
+  formData.append('tipo', selectedDocTipo);
+
+  toast(`⏳ Subiendo ${file.name}...`, 'info');
+  try {
+    const res  = await fetch(`${API.replace('/api/v1','')}/api/v1/expediente/${currentSolId}/subir`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body:    formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Error al subir');
+    toast('✅ Documento subido exitosamente', 'success');
+    input.value = '';
+    loadExpediente(currentSolId);
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'error');
+  }
 }
 
 /* ══════════════════════════════════════════════════════════
