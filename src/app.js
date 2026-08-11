@@ -56,12 +56,14 @@ const limiter = rateLimit({
   legacyHeaders:   false,
 });
 
-// Rate limit más estricto solo para el envío de solicitudes (evita spam)
-// En desarrollo se sube el límite para facilitar pruebas
+// Rate limit para envío de solicitudes:
+// Producción: 5 por hora | Desarrollo: sin límite práctico
 const limiterSolicitud = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 5 : 1000,
-  message: { ok: false, message: 'Límite de solicitudes alcanzado por hora' },
+  max: process.env.NODE_ENV === 'production'
+    ? parseInt(process.env.RATE_LIMIT_SOLICITUDES || '5')
+    : 1000,
+  message: { ok: false, message: 'Límite de solicitudes alcanzado por hora. Intenta más tarde.' },
 });
 
 app.use(limiter);
@@ -89,11 +91,18 @@ app.use(express.static(publicDir));
 app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
 /* ── Health check ─────────────────────────────────────────── */
-app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime(), publicDir, exists: fs.existsSync(publicDir) }));
+app.get('/health', (_req, res) => res.json({
+  ok:      true,
+  uptime:  process.uptime(),
+  env:     process.env.NODE_ENV || 'development',
+  version: require('../../package.json').version || '1.0.0',
+}));
 
-/* ── Rutas HTML (sitio y backoffice) ──────────────────────── */
+/* ── Rutas HTML (sitio, backoffice y portal) ──────────────── */
 app.get('/',           (_req, res) => res.sendFile(path.join(publicDir, 'index.html')));
 app.get('/backoffice', (_req, res) => res.sendFile(path.join(publicDir, 'backoffice.html')));
+app.get('/portal',     (_req, res) => res.sendFile(path.join(publicDir, 'portal.html')));
+app.get('/portal/*',   (_req, res) => res.sendFile(path.join(publicDir, 'portal.html')));
 
 /* ── Rutas API ────────────────────────────────────────────── */
 app.use(`${PREFIX}/auth`,        require('./routes/auth'));
@@ -105,6 +114,7 @@ app.use(`${PREFIX}/dashboard`,   require('./routes/dashboard'));
 app.use(`${PREFIX}/documentos`,  require('./routes/documentos'));
 app.use(`${PREFIX}/layouts`,     require('./routes/layouts'));
 app.use(`${PREFIX}/expediente`,  require('./routes/expediente'));
+app.use(`${PREFIX}/portal`,      require('./routes/portal').router);
 
 /* ── 404 ──────────────────────────────────────────────────── */
 app.use((_req, res) => {

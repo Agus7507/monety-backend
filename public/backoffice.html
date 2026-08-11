@@ -533,7 +533,7 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
       <div class="sidebar-logo">
         <div class="sidebar-logo-icon">M</div>
         <span style="font-size:17px;font-weight:800">Monety</span>
-        <span class="sidebar-logo-env">DEV</span>
+        <span class="sidebar-logo-env" id="envBadge">PROD</span>
       </div>
 
       <div class="sidebar-section">
@@ -1056,6 +1056,21 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
                 <div id="propuestasList" style="padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
               </div>
 
+              <!-- Liquidación LFT en simulador -->
+              <div class="section-card" id="simLiqCard" style="display:none">
+                <div class="section-header">
+                  <div>
+                    <div class="section-title">⚖️ Liquidación estimada LFT</div>
+                    <div class="section-sub">Monto máximo de préstamo según liquidación</div>
+                  </div>
+                </div>
+                <div style="padding:16px 20px;" id="simLiqBody">
+                  <div style="text-align:center;color:var(--text-3);font-size:13px">
+                    Carga una solicitud para ver el análisis de liquidación.
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -1088,6 +1103,7 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
       <div class="detail-tab active" onclick="switchTab('main', this)">📋 Principal</div>
       <div class="detail-tab" onclick="switchTab('extra', this)">📄 Datos adicionales</div>
       <div class="detail-tab" onclick="switchTab('docs', this)" id="docsTab">📎 Expediente</div>
+      <div class="detail-tab" onclick="switchTab('liquidacion', this)">⚖️ Liquidación</div>
       <div class="detail-tab" onclick="switchTab('amort', this)">📊 Amortización</div>
       <div class="detail-tab" onclick="switchTab('estado', this)">🔄 Estado</div>
     </div>
@@ -1255,7 +1271,20 @@ function initApp() {
   $('fechaHoy').textContent   = new Date().toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
   navigate('dashboard', document.querySelector('[data-page="dashboard"]'));
-  initSim(); // Pre-renderiza los botones de plazo
+  initSim();
+
+  // Detectar entorno desde el API y actualizar badge
+  try {
+    const h = await apiFetch('/health');
+    const badge = $('envBadge');
+    if (badge) {
+      const env = h.env || 'PROD';
+      badge.textContent = env.toUpperCase();
+      badge.style.background = env === 'production' ? 'rgba(63,185,80,.2)' : 'rgba(210,153,34,.2)';
+      badge.style.color      = env === 'production' ? 'var(--green)'       : 'var(--amber)';
+      if (env === 'production') badge.textContent = 'PROD';
+    }
+  } catch { /* silencioso */ }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1620,10 +1649,8 @@ function switchTab(tab, el) {
   if (el) el.classList.add('active');
   const content = document.getElementById(`dtab-${tab}`);
   if (content) content.classList.add('active');
-  // Carga el expediente cuando se abre la pestaña por primera vez
-  if (tab === 'docs' && currentSolId) {
-    loadExpediente(currentSolId);
-  }
+  if (tab === 'docs' && currentSolId) loadExpediente(currentSolId);
+  // La pestaña de liquidación ya se renderizó al construir el panel (calcLiquidacionHTML)
 }
 
 function closeDetail(e) {
@@ -1812,7 +1839,10 @@ async function loadDetailData(id, folio) {
       </div>
     </div>
 
-    <!-- TAB: Amortización -->
+    <!-- TAB: Liquidación LFT -->
+    <div class="detail-tab-content" id="dtab-liquidacion" style="padding:20px 24px;">
+      ${calcLiquidacionHTML(sol)}
+    </div>
     <div class="detail-tab-content" id="dtab-amort" style="padding:20px 24px;">
       <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
         <div style="font-size:13px;font-weight:600;color:var(--text-2)">${plazo} pagos de ${fmtMXN(pago)} · Total: ${fmtMXN(pago*plazo)}</div>
@@ -1974,8 +2004,252 @@ function abrirDocumento(tipo) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   SIMULADOR DE ANALISTA
+   CÁLCULO DE LIQUIDACIÓN LFT
 ══════════════════════════════════════════════════════════ */
+const SALARIO_MINIMO_DIARIO = 248.93; // 2026 zona libre frontera / general
+const TOPE_LIQUIDACION      = 25;     // veces el salario mínimo diario (LFT art. 486)
+const PCT_MAX_PRESTAMO      = 0.80;   // 80% de la liquidación = monto máximo
+
+/**
+ * Calcula la liquidación completa según la LFT México.
+ * @param {number} salarioBruto  - Salario mensual bruto
+ * @param {number} antiguedadAnos - Años trabajados (puede ser decimal)
+ * @param {string} fechaIngreso  - Fecha de ingreso ISO
+ * @returns {object} Desglose completo
+ */
+function calcularLiquidacionLFT(salarioBruto, antiguedadAnos, fechaIngreso) {
+  const salarioDiario   = (salarioBruto || 0) / 30;
+  const anos            = parseFloat(antiguedadAnos || 0);
+  const mesesFrac       = anos * 12;
+
+  // Tope de salario para liquidación (25 veces SMD - Art. 486 LFT)
+  const salarioDiarioTope = Math.min(salarioDiario, TOPE_LIQUIDACION * SALARIO_MINIMO_DIARIO);
+
+  // ── 1. Indemnización constitucional (Art. 123 Apartado A, frac. XXII) ──
+  // 3 meses de salario integrado
+  const tresMeses         = salarioDiario * 90;
+
+  // ── 2. Veinte días por año (Art. 50 LFT - rescisión sin causa) ──
+  const veinteDiasPorAnio = salarioDiarioTope * 20 * anos;
+
+  // ── 3. Prima de antigüedad (Art. 162 LFT) ──
+  // 12 días por año con tope de 2 SMGD
+  const topePrimaAntig    = Math.min(salarioDiario, 2 * SALARIO_MINIMO_DIARIO);
+  const primaAntiguedad   = topePrimaAntig * 12 * anos;
+
+  // ── 4. Partes proporcionales ──
+
+  // Aguinaldo proporcional (Art. 87 LFT - 15 días mínimo)
+  // Días trabajados en el año en curso
+  const hoy             = new Date();
+  const inicioAnio      = new Date(hoy.getFullYear(), 0, 1);
+  const diasEnAnio      = Math.floor((hoy - inicioAnio) / (1000 * 60 * 60 * 24));
+  const aguinaldoProp   = salarioDiario * 15 * (diasEnAnio / 365);
+
+  // Vacaciones proporcionales (Art. 76 LFT - tabla por años)
+  function diasVacaciones(a) {
+    if (a < 1)  return 6  * (a);
+    if (a < 2)  return 6;
+    if (a < 3)  return 8;
+    if (a < 4)  return 10;
+    if (a < 5)  return 12;
+    if (a < 10) return 14 + Math.floor(a - 5) * 2;
+    if (a < 15) return 22 + Math.floor(a - 10) * 2;
+    return 32;
+  }
+  const diasVac         = diasVacaciones(anos);
+  // Proporcional al año en curso (fracción del último año)
+  const fracAnioActual  = (mesesFrac % 12) / 12;
+  const vacacionesProp  = salarioDiario * diasVac * fracAnioActual;
+
+  // Prima vacacional proporcional (Art. 80 LFT - 25% mínimo)
+  const primaVacacProp  = vacacionesProp * 0.25;
+
+  // ── Totales ──
+  const subtotalIndem   = tresMeses + veinteDiasPorAnio;
+  const subtotalPrimas  = primaAntiguedad;
+  const subtotalPropor  = aguinaldoProp + vacacionesProp + primaVacacProp;
+  const totalLiquidacion= subtotalIndem + subtotalPrimas + subtotalPropor;
+  const montoMaxPrestamo= totalLiquidacion * PCT_MAX_PRESTAMO;
+
+  return {
+    salarioDiario,
+    salarioDiarioTope,
+    anos,
+    diasVac: Math.round(diasVac),
+    tresMeses,
+    veinteDiasPorAnio,
+    primaAntiguedad,
+    aguinaldoProp,
+    vacacionesProp,
+    primaVacacProp,
+    subtotalIndem,
+    subtotalPrimas,
+    subtotalPropor,
+    totalLiquidacion,
+    montoMaxPrestamo,
+    pctUsado: 0, // se calcula al comparar con el crédito
+  };
+}
+
+/**
+ * Genera el HTML de la pestaña Liquidación para el panel de detalle.
+ */
+function calcLiquidacionHTML(sol) {
+  const salario  = parseFloat(sol.salario_mensual_bruto || sol.salario_mensual_neto || 0);
+  const antiguedad = parseFloat(sol.antiguedad_anos || 0);
+
+  if (!salario || !antiguedad) {
+    return `<div class="empty-state" style="padding:40px 0">
+      <div style="font-size:32px;margin-bottom:12px">⚖️</div>
+      <div style="color:var(--text-3)">Faltan datos para calcular la liquidación.<br>
+        <span style="font-size:12px">Se necesita salario bruto y fecha de ingreso.</span>
+      </div>
+    </div>`;
+  }
+
+  const liq   = calcularLiquidacionLFT(salario, antiguedad, sol.fecha_ingreso_emp);
+  const monto = parseFloat(sol.monto_solicitado || 0);
+  const pct   = liq.montoMaxPrestamo > 0 ? (monto / liq.montoMaxPrestamo * 100) : 0;
+  const ok    = monto <= liq.montoMaxPrestamo;
+  const color = ok ? 'var(--green)' : 'var(--red)';
+  const icon  = ok ? '✅' : '⚠️';
+
+  return `
+    <!-- Encabezado -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;
+                  letter-spacing:.5px;margin-bottom:4px">Liquidación según Ley Federal del Trabajo</div>
+      <div style="font-size:12px;color:var(--text-2)">
+        Salario bruto: <b>${fmtMXN(salario)}/mes</b> ·
+        Antigüedad: <b>${liq.anos.toFixed(1)} años</b> ·
+        Salario diario: <b>${fmtMXN(liq.salarioDiario)}</b>
+      </div>
+    </div>
+
+    <!-- Desglose -->
+    <div style="background:var(--bg-raised);border-radius:10px;overflow:hidden;
+                border:1px solid var(--border);margin-bottom:16px;">
+
+      <!-- Indemnización constitucional -->
+      <div style="padding:10px 14px;background:var(--bg-surface);
+                  font-size:11px;font-weight:700;color:var(--text-3);
+                  text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">
+        Indemnización constitucional (Art. 123 + Art. 50 LFT)
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text-2)">3 meses de salario (90 días)</span>
+        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.tresMeses)}</span>
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text-2)">20 días × ${liq.anos.toFixed(1)} años <span style="font-size:11px;color:var(--text-3)">(tope ${fmtMXN(liq.salarioDiarioTope)}/día)</span></span>
+        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.veinteDiasPorAnio)}</span>
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;
+                  background:rgba(27,168,150,.06);border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:700;color:var(--text-1)">Subtotal indemnización</span>
+        <span style="font-size:14px;font-weight:700;color:var(--teal)">${fmtMXN(liq.subtotalIndem)}</span>
+      </div>
+
+      <!-- Prima de antigüedad -->
+      <div style="padding:10px 14px;background:var(--bg-surface);
+                  font-size:11px;font-weight:700;color:var(--text-3);
+                  text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">
+        Prima de Antigüedad (Art. 162 LFT)
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text-2)">12 días × ${liq.anos.toFixed(1)} años <span style="font-size:11px;color:var(--text-3)">(tope 2 SMD)</span></span>
+        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.primaAntiguedad)}</span>
+      </div>
+
+      <!-- Partes proporcionales -->
+      <div style="padding:10px 14px;background:var(--bg-surface);
+                  font-size:11px;font-weight:700;color:var(--text-3);
+                  text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">
+        Partes Proporcionales
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text-2)">Aguinaldo proporcional (15 días mínimo)</span>
+        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.aguinaldoProp)}</span>
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text-2)">Vacaciones proporcionales (${liq.diasVac} días/año)</span>
+        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.vacacionesProp)}</span>
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text-2)">Prima vacacional proporcional (25%)</span>
+        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.primaVacacProp)}</span>
+      </div>
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;
+                  background:rgba(27,168,150,.06)">
+        <span style="font-size:13px;font-weight:700;color:var(--text-1)">Subtotal proporcionales</span>
+        <span style="font-size:14px;font-weight:700;color:var(--teal)">${fmtMXN(liq.subtotalPropor)}</span>
+      </div>
+    </div>
+
+    <!-- Total liquidación -->
+    <div style="background:var(--dark);border-radius:12px;padding:18px 20px;
+                margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--teal);
+                    text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">
+          Total liquidación estimada
+        </div>
+        <div style="font-size:11px;color:var(--text-3)">Despido injustificado · LFT México</div>
+      </div>
+      <div style="font-size:28px;font-weight:800;color:var(--teal)">${fmtMXN(liq.totalLiquidacion)}</div>
+    </div>
+
+    <!-- Monto máximo préstamo -->
+    <div style="background:${ok?'rgba(63,185,80,.08)':'rgba(248,81,73,.08)'};
+                border:1px solid ${color};border-radius:12px;padding:18px 20px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:${color};
+                      text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">
+            ${icon} Monto máximo de préstamo (80% de liquidación)
+          </div>
+          <div style="font-size:11px;color:var(--text-3)">
+            ${fmtMXN(liq.totalLiquidacion)} × 80% = <b style="color:${color}">${fmtMXN(liq.montoMaxPrestamo)}</b>
+          </div>
+        </div>
+        <div style="font-size:28px;font-weight:800;color:${color}">${fmtMXN(liq.montoMaxPrestamo)}</div>
+      </div>
+
+      <!-- Barra de uso del límite -->
+      <div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;
+                    color:var(--text-2);margin-bottom:5px;">
+          <span>Crédito solicitado: <b>${fmtMXN(monto)}</b></span>
+          <span style="color:${color};font-weight:700">${pct.toFixed(1)}% del límite</span>
+        </div>
+        <div style="background:var(--bg-active);border-radius:4px;height:8px;overflow:hidden;">
+          <div style="height:100%;width:${Math.min(pct,100).toFixed(1)}%;
+                      background:${color};border-radius:4px;transition:width .6s ease;"></div>
+        </div>
+      </div>
+
+      <div style="font-size:12px;font-weight:600;color:${color};">
+        ${ok
+          ? `✅ El monto solicitado está dentro del límite de seguridad.`
+          : `⚠️ El monto solicitado excede el 80% de la liquidación estimada. Se recomienda reducir el crédito a ${fmtMXN(liq.montoMaxPrestamo)} o menos.`
+        }
+      </div>
+    </div>
+
+    <!-- Nota legal -->
+    <div style="background:var(--bg-raised);border-radius:8px;padding:12px 14px;
+                border-left:3px solid var(--amber);">
+      <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:4px">⚠️ Nota legal</div>
+      <div style="font-size:11px;color:var(--text-2);line-height:1.6">
+        Este cálculo es una estimación con base en la Ley Federal del Trabajo (Art. 50, 76, 80, 87, 123 y 162).
+        El salario diario integrado puede variar si el empleado tiene partes variables (comisiones, bonos, despensa, etc.).
+        El tope de liquidación por indemnización es de ${TOPE_LIQUIDACION} veces el SMG diario ($${SALARIO_MINIMO_DIARIO}/día).
+        Consultar con el área legal ante cualquier caso particular.
+      </div>
+    </div>
+  `;
+}
 let simPlazo   = 12;
 let simTipoNom = 'MENSUAL';
 
@@ -2199,6 +2473,51 @@ async function cargarDesdeFolio() {
       const info = $('simAprobarInfo');
       if (info) info.textContent =
         `Solicitud: ${folio} · ${sol.nombre || ''} · Estado actual: ${ESTADO_LABELS[sol.estado]?.[1] || sol.estado}`;
+    }
+
+    // ── Mostrar análisis de liquidación LFT en el simulador ──
+    const salBruto   = parseFloat(sol.salario_mensual_bruto || sol.salario_mensual_neto || 0);
+    const antiguedad = parseFloat(sol.antiguedad_anos || 0);
+    const montoSol   = parseFloat(monto);
+    const liqCard = $('simLiqCard');
+    const liqBody = $('simLiqBody');
+    if (liqCard && liqBody && salBruto > 0) {
+      liqCard.style.display = 'block';
+      const liq = calcularLiquidacionLFT(salBruto, antiguedad, sol.fecha_ingreso_emp);
+      const ok  = montoSol <= liq.montoMaxPrestamo;
+      const pct = liq.montoMaxPrestamo > 0 ? Math.min((montoSol / liq.montoMaxPrestamo * 100), 100) : 0;
+      const col = ok ? 'var(--green)' : 'var(--red)';
+      liqBody.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div style="background:var(--bg-raised);border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Total liquidación</div>
+            <div style="font-size:17px;font-weight:800;color:var(--teal)">${fmtMXN(liq.totalLiquidacion)}</div>
+            <div style="font-size:10px;color:var(--text-3);margin-top:2px">${liq.anos.toFixed(1)} años · ${fmtMXN(liq.salarioDiario)}/día</div>
+          </div>
+          <div style="background:${ok?'rgba(63,185,80,.08)':'rgba(248,81,73,.08)'};border-radius:8px;padding:12px;text-align:center;border:1px solid ${col};">
+            <div style="font-size:10px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Máx. préstamo (80%)</div>
+            <div style="font-size:17px;font-weight:800;color:${col}">${fmtMXN(liq.montoMaxPrestamo)}</div>
+            <div style="font-size:10px;color:${col};margin-top:2px">${ok?'✅ Dentro del límite':'⚠️ Excede el límite'}</div>
+          </div>
+        </div>
+        <div style="font-size:11px;background:var(--bg-raised);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-2)">3 meses (90 días)</span><span style="font-weight:600">${fmtMXN(liq.tresMeses)}</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-2)">20 días × ${liq.anos.toFixed(1)} años</span><span style="font-weight:600">${fmtMXN(liq.veinteDiasPorAnio)}</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-2)">Prima antigüedad</span><span style="font-weight:600">${fmtMXN(liq.primaAntiguedad)}</span></div>
+          <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;"><span style="color:var(--text-2)">Partes proporcionales</span><span style="font-weight:600">${fmtMXN(liq.subtotalPropor)}</span></div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-2);margin-bottom:4px;">
+            <span>Monto simulado: <b>${fmtMXN(montoSol)}</b></span>
+            <span style="color:${col};font-weight:700">${pct.toFixed(1)}% del límite</span>
+          </div>
+          <div style="background:var(--bg-active);border-radius:4px;height:6px;overflow:hidden;">
+            <div style="height:100%;width:${pct.toFixed(1)}%;background:${col};border-radius:4px;"></div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:${col};font-weight:600;margin-top:6px;">
+          ${ok ? `✅ El monto está dentro del límite de seguridad.` : `⚠️ Reducir el monto a máximo ${fmtMXN(liq.montoMaxPrestamo)}.`}
+        </div>`;
     }
 
     const nombre = sol.nombre || sol.nombres || 'el solicitante';

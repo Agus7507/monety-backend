@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monety — Mi Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ── VARIABLES ─────────────────────────────────────────── */
+    :root {
+      --teal:       #1BA896;
+      --teal-dark:  #138e7e;
+      --teal-dim:   rgba(27,168,150,.12);
+      --teal-light: #e8f7f5;
+      --dark:       #0d1117;
+      --card:       #ffffff;
+      --bg:         #f0fafa;
+      --border:     #e2e8f0;
+      --text-1:     #1a202c;
+      --text-2:     #4a5568;
+      --text-3:     #8b949e;
+      --green:      #3fb950;
+      --amber:      #d29922;
+      --red:        #f85149;
+      --blue:       #58a6ff;
+      --radius:     14px;
+      --shadow:     0 4px 24px rgba(0,0,0,.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text-1);
+      min-height: 100vh;
+    }
+
+    /* ── AUTH SCREEN ──────────────────────────────────────── */
+    .auth-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--dark) 0%, #0f2420 50%, #0d2e28 100%);
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .auth-screen::before {
+      content: '';
+      position: absolute;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(27,168,150,.15) 0%, transparent 70%);
+      top: -200px; right: -200px;
+      pointer-events: none;
+    }
+    .auth-screen::after {
+      content: '';
+      position: absolute;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(27,168,150,.1) 0%, transparent 70%);
+      bottom: -100px; left: -100px;
+      pointer-events: none;
+    }
+    .auth-card {
+      background: white;
+      border-radius: 24px;
+      padding: 48px 44px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.35);
+      position: relative;
+      z-index: 1;
+      animation: slideUp .4s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .auth-logo {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 36px;
+    }
+    .auth-logo-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: var(--teal); display: flex; align-items: center;
+      justify-content: center; color: white; font-size: 20px; font-weight: 800;
+    }
+    .auth-logo-text { font-size: 22px; font-weight: 800; color: var(--dark); }
+    .auth-logo-badge {
+      font-size: 10px; font-weight: 600; background: var(--teal-dim);
+      color: var(--teal); padding: 3px 8px; border-radius: 6px;
+    }
+    .auth-title { font-size: 24px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
+    .auth-sub   { font-size: 14px; color: var(--text-2); margin-bottom: 28px; line-height: 1.5; }
+
+    /* ── FORM ELEMENTS ─────────────────────────────────────── */
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: var(--text-2); margin-bottom: 6px;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    .form-input {
+      width: 100%; padding: 12px 14px; border-radius: 10px;
+      border: 1.5px solid var(--border); background: white;
+      font-size: 14px; font-family: 'Inter', sans-serif;
+      color: var(--text-1); transition: border-color .2s, box-shadow .2s;
+      outline: none;
+    }
+    .form-input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-dim); }
+    .form-input::placeholder { color: var(--text-3); }
+
+    .btn-primary {
+      width: 100%; padding: 14px; border-radius: 10px;
+      background: var(--teal); border: none; color: white;
+      font-size: 15px; font-weight: 700; font-family: 'Inter', sans-serif;
+      cursor: pointer; transition: background .2s, transform .1s;
+      margin-top: 8px;
+    }
+    .btn-primary:hover   { background: var(--teal-dark); }
+    .btn-primary:active  { transform: scale(.99); }
+    .btn-primary:disabled{ opacity: .6; cursor: not-allowed; }
+
+    .btn-ghost {
+      background: none; border: 1.5px solid var(--border);
+      border-radius: 10px; padding: 10px 18px;
+      font-size: 13px; font-weight: 600; color: var(--text-2);
+      cursor: pointer; font-family: 'Inter', sans-serif;
+      transition: border-color .2s, color .2s;
+    }
+    .btn-ghost:hover { border-color: var(--teal); color: var(--teal); }
+
+    .btn-sm {
+      padding: 7px 14px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif;
+      border: 1.5px solid var(--border); background: white;
+      color: var(--text-2); transition: all .15s;
+    }
+    .btn-sm:hover { border-color: var(--teal); color: var(--teal); }
+    .btn-sm.teal  { background: var(--teal); color: white; border-color: var(--teal); }
+
+    .auth-switch {
+      text-align: center; margin-top: 20px; font-size: 13px; color: var(--text-2);
+    }
+    .auth-switch a {
+      color: var(--teal); font-weight: 600; cursor: pointer; text-decoration: none;
+    }
+    .auth-switch a:hover { text-decoration: underline; }
+
+    .auth-error {
+      background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.2);
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
+      font-size: 13px; color: var(--red); display: none;
+    }
+    .auth-success {
+      background: var(--teal-dim); border: 1px solid rgba(27,168,150,.25);
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
+      font-size: 13px; color: var(--teal); display: none;
+    }
+
+    /* ── TABS SWITCH ───────────────────────────────────────── */
+    .auth-tabs {
+      display: flex; background: #f7fafa; border-radius: 12px;
+      padding: 4px; margin-bottom: 28px; gap: 4px;
+    }
+    .auth-tab {
+      flex: 1; padding: 10px; border-radius: 9px;
+      border: none; background: transparent; cursor: pointer;
+      font-size: 13px; font-weight: 600; color: var(--text-2);
+      font-family: 'Inter', sans-serif; transition: all .2s;
+    }
+    .auth-tab.active {
+      background: white; color: var(--teal);
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+
+    /* ── MAIN APP ──────────────────────────────────────────── */
+    #app { display: none; min-height: 100vh; }
+
+    /* ── TOP NAV ───────────────────────────────────────────── */
+    .topnav {
+      background: white; border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 60px; display: flex;
+      align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 12px rgba(0,0,0,.04);
+    }
+    .topnav-logo { display: flex; align-items: center; gap: 10px; }
+    .topnav-logo-icon {
+      width: 34px; height: 34px; background: var(--teal);
+      border-radius: 9px; display: flex; align-items: center;
+      justify-content: center; color: white; font-weight: 800; font-size: 16px;
+    }
+    .topnav-logo-text { font-size: 17px; font-weight: 800; color: var(--dark); }
+    .topnav-logo-badge {
+      font-size: 10px; background: var(--teal-dim); color: var(--teal);
+      padding: 2px 8px; border-radius: 6px; font-weight: 600;
+    }
+    .topnav-right { display: flex; align-items: center; gap: 12px; }
+    .topnav-user { font-size: 13px; color: var(--text-2); font-weight: 500; }
+    .avatar {
+      width: 34px; height: 34px; background: var(--teal); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 700; font-size: 13px; cursor: pointer;
+    }
+
+    /* ── CONTENT ───────────────────────────────────────────── */
+    .page-wrap  { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+    .page-title { font-size: 24px; font-weight: 700; color: var(--dark); margin-bottom: 4px; }
+    .page-sub   { font-size: 14px; color: var(--text-2); margin-bottom: 28px; }
+
+    /* ── PAGE NAV ──────────────────────────────────────────── */
+    .page-nav {
+      display: flex; gap: 4px; background: #f0fafa;
+      border-radius: 12px; padding: 4px; margin-bottom: 28px;
+    }
+    .page-nav-btn {
+      flex: 1; padding: 10px 8px; border-radius: 9px; border: none;
+      background: transparent; cursor: pointer;
+      font-size: 13px; font-weight: 600; color: var(--text-2);
+      font-family: 'Inter', sans-serif; transition: all .2s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .page-nav-btn.active {
+      background: white; color: var(--teal);
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+
+    /* ── CARDS ─────────────────────────────────────────────── */
+    .card {
+      background: white; border-radius: var(--radius);
+      border: 1px solid var(--border); box-shadow: var(--shadow);
+    }
+    .card-header {
+      padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .card-title { font-size: 15px; font-weight: 700; color: var(--dark); }
+    .card-sub   { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+    .card-body  { padding: 20px 24px; }
+
+    /* ── STAT CARDS ────────────────────────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: white; border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 20px 22px;
+      box-shadow: var(--shadow);
+    }
+    .stat-label { font-size: 11px; font-weight: 600; color: var(--text-3);
+                  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .stat-value { font-size: 26px; font-weight: 800; color: var(--dark); }
+    .stat-sub   { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+    /* ── ESTADO BADGE ──────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px; border-radius: 20px;
+      font-size: 11px; font-weight: 700; white-space: nowrap;
+    }
+    .badge::before { content: '●'; font-size: 8px; }
+    .badge.aprobada     { background: rgba(63,185,80,.12);  color: #3fb950; }
+    .badge.pre_aprobada { background: rgba(27,168,150,.12); color: #1BA896; }
+    .badge.en_revision  { background: rgba(88,166,255,.12); color: #58a6ff; }
+    .badge.pendiente    { background: rgba(210,153,34,.12); color: #d29922; }
+    .badge.rechazada    { background: rgba(248,81,73,.12);  color: #f85149; }
+    .badge.cancelada    { background: rgba(139,148,158,.12);color: #8b949e; }
+    .badge.activo       { background: rgba(63,185,80,.12);  color: #3fb950; }
+
+    /* ── TIMELINE ──────────────────────────────────────────── */
+    .timeline { position: relative; padding-left: 24px; }
+    .timeline::before {
+      content: ''; position: absolute; left: 7px; top: 0; bottom: 0;
+      width: 2px; background: var(--border);
+    }
+    .tl-item { position: relative; margin-bottom: 20px; }
+    .tl-dot {
+      position: absolute; left: -24px; top: 3px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--teal); border: 2px solid white;
+      box-shadow: 0 0 0 2px var(--teal);
+    }
+    .tl-dot.grey { background: var(--border); box-shadow: 0 0 0 2px var(--border); }
+    .tl-title { font-size: 13px; font-weight: 600; color: var(--dark); }
+    .tl-date  { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+    .tl-note  { font-size: 12px; color: var(--text-2); margin-top: 4px;
+                background: var(--bg); border-radius: 6px; padding: 6px 10px; }
+
+    /* ── AMORT TABLE ───────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: var(--dark); color: white; padding: 10px 12px;
+      font-size: 11px; font-weight: 600; text-align: left;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    td {
+      padding: 10px 12px; font-size: 13px; color: var(--text-1);
+      border-bottom: 1px solid var(--border);
+    }
+    tr:nth-child(even) td { background: #fafbfc; }
+    tr.pagado td { opacity: .5; text-decoration: line-through; }
+    .td-mono { font-family: 'Courier New', monospace; font-size: 12px; }
+
+    /* ── INFO GRID ─────────────────────────────────────────── */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .info-item { }
+    .info-label { font-size: 11px; font-weight: 600; color: var(--text-3);
+                  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+    .info-value { font-size: 14px; font-weight: 600; color: var(--dark); }
+
+    /* ── PROGRESS BAR ──────────────────────────────────────── */
+    .progress-wrap { margin: 16px 0; }
+    .progress-label { display: flex; justify-content: space-between;
+                      font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+    .progress-track { background: var(--border); border-radius: 6px; height: 8px; overflow: hidden; }
+    .progress-fill  { height: 100%; background: var(--teal); border-radius: 6px;
+                      transition: width .6s ease; }
+
+    /* ── SCORE BAR ─────────────────────────────────────────── */
+    .score-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .score-name { font-size: 12px; color: var(--text-2); width: 110px; flex-shrink: 0; }
+    .score-track { flex: 1; background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+    .score-fill  { height: 100%; background: var(--teal); border-radius: 4px; }
+    .score-pts   { font-size: 12px; font-weight: 600; color: var(--text-2);
+                   width: 48px; text-align: right; flex-shrink: 0; }
+
+    /* ── DOC LIST ──────────────────────────────────────────── */
+    .doc-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .doc-icon { font-size: 22px; flex-shrink: 0; }
+    .doc-info { flex: 1; }
+    .doc-tipo { font-size: 11px; font-weight: 700; color: var(--teal);
+                text-transform: uppercase; letter-spacing: .5px; }
+    .doc-name { font-size: 13px; color: var(--dark); margin-top: 1px; }
+    .doc-meta { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+
+    /* ── EMPTY STATE ───────────────────────────────────────── */
+    .empty-state {
+      text-align: center; padding: 60px 24px;
+      color: var(--text-3); font-size: 14px;
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+    /* ── TOAST ─────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--dark); color: white;
+      padding: 12px 24px; border-radius: 12px;
+      font-size: 14px; font-weight: 500;
+      box-shadow: 0 8px 32px rgba(0,0,0,.25);
+      transition: transform .3s ease;
+      z-index: 9999; white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.success { background: var(--teal); }
+    #toast.error   { background: var(--red); }
+
+    /* ── LOADER ────────────────────────────────────────────── */
+    .loader {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 3px solid var(--border);
+      border-top-color: var(--teal);
+      animation: spin .7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── RESPONSIVE ────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .auth-card     { padding: 32px 24px; }
+      .stats-grid    { grid-template-columns: 1fr; }
+      .info-grid     { grid-template-columns: 1fr; }
+      .page-nav-btn span { display: none; }
+    }
+
+    /* ── ANIMATE ───────────────────────────────────────────── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn .3s ease; }
+
+    /* Hidden utility */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     PANTALLA DE AUTENTICACIÓN
+══════════════════════════════════════════════════════════ -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <!-- Logo -->
+    <div class="auth-logo">
+      <div class="auth-logo-icon">M</div>
+      <span class="auth-logo-text">Monety</span>
+      <span class="auth-logo-badge">Mi Portal</span>
+    </div>
+
+    <!-- Tabs Login / Registro -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="showTab('login')">Iniciar sesión</button>
+      <button class="auth-tab" onclick="showTab('register')">Crear cuenta</button>
+    </div>
+
+    <!-- Mensajes -->
+    <div class="auth-error"  id="authError"></div>
+    <div class="auth-success" id="authSuccess"></div>
+
+    <!-- LOGIN FORM -->
+    <div id="formLogin">
+      <div class="auth-title">Bienvenido de nuevo</div>
+      <div class="auth-sub">Ingresa tus datos para ver el estado de tu solicitud.</div>
+      <div class="form-group">
+        <label class="form-label">Correo electrónico</label>
+        <input type="email" class="form-input" id="loginEmail"
+          placeholder="tu@correo.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input type="password" class="form-input" id="loginPass"
+          placeholder="••••••••" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn-primary" id="loginBtn" onclick="doLogin()">
+        Iniciar sesión
+      </button>
+      <div class="auth-switch">
+        ¿No tienes cuenta?
+        <a onclick="showTab('register')">Crea una aquí</a>
+      </div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="formRegister" class="hidden">
+      <div class="auth-title">Crea tu cuenta</div>
+      <div class="auth-sub">Necesitas el email y folio de tu solicitud para registrarte.</div>
+      <div class="form-group">
+        <label class="form-label">Correo electrónico</label>
+        <input type="email" class="form-input" id="regEmail"
+          placeholder="el que usaste en la solicitud" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Folio de tu solicitud</label>
+        <input type="text" class="form-input" id="regFolio"
+          placeholder="MNT-000001" style="font-family:monospace;text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Crea una contraseña</label>
+        <input type="password" class="form-input" id="regPass"
+          placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirma la contraseña</label>
+        <input type="password" class="form-input" id="regPass2"
+          placeholder="Repite la contraseña" autocomplete="new-password"
+          onkeydown="if(event.key==='Enter')doRegister()">
+      </div>
+      <button class="btn-primary" id="regBtn" onclick="doRegister()">
+        Crear cuenta
+      </button>
+      <div class="auth-switch">
+        ¿Ya tienes cuenta?
+        <a onclick="showTab('login')">Inicia sesión</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PORTAL PRINCIPAL
+══════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- TOP NAV -->
+  <nav class="topnav">
+    <div class="topnav-logo">
+      <div class="topnav-logo-icon">M</div>
+      <span class="topnav-logo-text">Monety</span>
+      <span class="topnav-logo-badge">Mi Portal</span>
+    </div>
+    <div class="topnav-right">
+      <span class="topnav-user" id="navUserName">—</span>
+      <div class="avatar" id="navAvatar" title="Cerrar sesión" onclick="doLogout()">?</div>
+    </div>
+  </nav>
+
+  <!-- CONTENT -->
+  <div class="page-wrap">
+
+    <!-- Page navigation -->
+    <div class="page-nav">
+      <button class="page-nav-btn active" id="navHome" onclick="showPage('home')">
+        🏠 <span>Inicio</span>
+      </button>
+      <button class="page-nav-btn" id="navSolicitud" onclick="showPage('solicitud')">
+        📋 <span>Mi solicitud</span>
+      </button>
+      <button class="page-nav-btn" id="navCredito" onclick="showPage('credito')">
+        💳 <span>Mi crédito</span>
+      </button>
+      <button class="page-nav-btn" id="navDocs" onclick="showPage('docs')">
+        📎 <span>Documentos</span>
+      </button>
+      <button class="page-nav-btn" id="navPerfil" onclick="showPage('perfil')">
+        👤 <span>Mi perfil</span>
+      </button>
+    </div>
+
+    <!-- ── HOME PAGE ──────────────────────────────────────── -->
+    <div id="pageHome" class="fade-in">
+      <div class="page-title" id="homeGreeting">Buenos días 👋</div>
+      <div class="page-sub">Aquí puedes ver el estado de tu solicitud y crédito.</div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-label">Estado de tu solicitud</div>
+          <div id="statEstado" style="margin-top:8px">
+            <div class="loader"></div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Monto solicitado</div>
+          <div class="stat-value" id="statMonto">—</div>
+          <div class="stat-sub" id="statPlazo">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pago mensual</div>
+          <div class="stat-value" id="statPago">—</div>
+          <div class="stat-sub" id="statSaldo">—</div>
+        </div>
+      </div>
+
+      <!-- Progreso del crédito -->
+      <div class="card" id="cardProgreso" style="margin-bottom:20px;display:none">
+        <div class="card-header">
+          <div>
+            <div class="card-title">📊 Progreso de tu crédito</div>
+            <div class="card-sub" id="progresoSub"></div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="progress-wrap">
+            <div class="progress-label">
+              <span>Pagado</span>
+              <span id="progresoPct">0%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="progresoFill" style="width:0%"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px;font-size:13px">
+            <div><div style="color:var(--text-3);font-size:11px;margin-bottom:3px">Capital pagado</div><div style="font-weight:700;color:var(--green)" id="progCapPagado">—</div></div>
+            <div><div style="color:var(--text-3);font-size:11px;margin-bottom:3px">Saldo restante</div><div style="font-weight:700;color:var(--amber)" id="progSaldo">—</div></div>
+            <div><div style="color:var(--text-3);font-size:11px;margin-bottom:3px">Próximo pago</div><div style="font-weight:700;color:var(--dark)" id="progProxPago">—</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Últimas novedades -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🔔 Últimas novedades</div>
+            <div class="card-sub">Historial de cambios en tu solicitud</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="timeline" id="timelineHome">
+            <div style="color:var(--text-3);text-align:center;padding:20px">
+              <div class="loader"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SOLICITUD PAGE ─────────────────────────────────── -->
+    <div id="pageSolicitud" class="hidden fade-in">
+      <div class="page-title">Mi solicitud</div>
+      <div class="page-sub">Detalles completos de tu solicitud de crédito.</div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <div>
+            <div class="card-title" id="solFolioTitle">—</div>
+            <div class="card-sub" id="solFechaTitle">—</div>
+          </div>
+          <div id="solEstadoBadge"></div>
+        </div>
+        <div class="card-body">
+          <div class="info-grid" id="solInfoGrid" style="margin-bottom:20px">
+            <div style="color:var(--text-3);text-align:center;padding:20px;grid-column:span 2">
+              <div class="loader"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scoring -->
+      <div class="card" id="scoringCard">
+        <div class="card-header">
+          <div><div class="card-title">Evaluación crediticia</div></div>
+          <div id="scoringRank"></div>
+        </div>
+        <div class="card-body" id="scoringBody">
+          <div style="color:var(--text-3);text-align:center;padding:20px"><div class="loader"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CRÉDITO PAGE ───────────────────────────────────── -->
+    <div id="pageCredito" class="hidden fade-in">
+      <div class="page-title">Mi crédito</div>
+      <div class="page-sub">Condiciones y tabla de amortización de tu crédito.</div>
+
+      <div id="creditoContent">
+        <div class="empty-state">
+          <div class="empty-icon">💳</div>
+          <div>Cuando tu solicitud sea aprobada, aquí verás los detalles de tu crédito.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DOCS PAGE ──────────────────────────────────────── -->
+    <div id="pageDocs" class="hidden fade-in">
+      <div class="page-title">Mis documentos</div>
+      <div class="page-sub">Documentos del expediente digital de tu solicitud.</div>
+
+      <div class="card" id="docsCard">
+        <div class="card-header">
+          <div><div class="card-title">Expediente digital</div></div>
+        </div>
+        <div class="card-body" id="docsBody">
+          <div style="text-align:center;padding:24px"><div class="loader"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PERFIL PAGE ────────────────────────────────────── -->
+    <div id="pagePerfil" class="hidden fade-in">
+      <div class="page-title">Mi perfil</div>
+      <div class="page-sub">Tus datos personales registrados en Monety.</div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <div><div class="card-title">Datos personales</div></div>
+        </div>
+        <div class="card-body">
+          <div class="info-grid" id="perfilGrid">
+            <div style="color:var(--text-3);text-align:center;padding:20px;grid-column:span 2">
+              <div class="loader"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cambiar contraseña -->
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Seguridad</div></div>
+        </div>
+        <div class="card-body" style="max-width:400px">
+          <div class="auth-error"  id="passError"></div>
+          <div class="auth-success" id="passSuccess"></div>
+          <div class="form-group">
+            <label class="form-label">Contraseña actual</label>
+            <input type="password" class="form-input" id="passActual" placeholder="••••••••">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nueva contraseña</label>
+            <input type="password" class="form-input" id="passNueva" placeholder="Mínimo 8 caracteres">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Confirmar nueva contraseña</label>
+            <input type="password" class="form-input" id="passConfirm" placeholder="Repite la contraseña">
+          </div>
+          <button class="btn-sm teal" style="padding:10px 20px;" onclick="cambiarPassword()">
+            Cambiar contraseña
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-wrap -->
+</div><!-- /app -->
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   CONFIG
+══════════════════════════════════════════════════════════ */
+const API   = window.location.origin + '/api/v1/portal';
+let portalToken   = localStorage.getItem('portal_token');
+let portalUser    = JSON.parse(localStorage.getItem('portal_user') || 'null');
+let solicitudData = null;
+let creditoData   = null;
+
+/* ══════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════ */
+function fmtMXN(n) {
+  return Number(n||0).toLocaleString('es-MX', { style:'currency', currency:'MXN' });
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' });
+}
+function toast(msg, type='info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = `show ${type}`;
+  setTimeout(() => el.className = '', 3500);
+}
+async function portalFetch(endpoint, opts={}) {
+  const res = await fetch(API + endpoint, {
+    ...opts,
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${portalToken}`,
+      ...(opts.headers || {}),
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Error en la solicitud');
+  return data;
+}
+
+const ESTADO_INFO = {
+  PENDIENTE:    { label: 'Pendiente',    cls: 'pendiente'    },
+  EN_REVISION:  { label: 'En revisión',  cls: 'en_revision'  },
+  PRE_APROBADA: { label: 'Pre-aprobada', cls: 'pre_aprobada' },
+  APROBADA:     { label: 'Aprobada',     cls: 'aprobada'     },
+  RECHAZADA:    { label: 'Rechazada',    cls: 'rechazada'    },
+  CANCELADA:    { label: 'Cancelada',    cls: 'cancelada'    },
+};
+function badgeHtml(estado) {
+  const info = ESTADO_INFO[estado] || { label: estado, cls: '' };
+  return `<span class="badge ${info.cls}">${info.label}</span>`;
+}
+
+const TIPO_ICONS = {
+  INE_FRENTE:'🪪', INE_REVERSO:'🪪', CURP:'📄', RFC:'📄',
+  COMPROBANTE_DOMICILIO:'🏠', COMPROBANTE_INGRESOS:'💰',
+  RECIBO_NOMINA:'💼', ESTADO_CUENTA:'🏦', OTRO:'📎',
+};
+
+/* ══════════════════════════════════════════════════════════
+   AUTH
+══════════════════════════════════════════════════════════ */
+function showTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('formLogin').classList.toggle('hidden', !isLogin);
+  document.getElementById('formRegister').classList.toggle('hidden', isLogin);
+  document.querySelectorAll('.auth-tab').forEach((t, i) => {
+    t.classList.toggle('active', isLogin ? i===0 : i===1);
+  });
+  clearAuthMsgs();
+}
+
+function clearAuthMsgs() {
+  ['authError','authSuccess'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.style.display='none'; el.textContent=''; }
+  });
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg; el.style.display = 'block';
+}
+function showAuthSuccess(msg) {
+  const el = document.getElementById('authSuccess');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+async function doLogin() {
+  clearAuthMsgs();
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  if (!email || !pass) { showAuthError('Completa todos los campos'); return; }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Verificando...';
+
+  try {
+    const data = await fetch(`${API}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass }),
+    }).then(r => r.json());
+
+    if (!data.ok) { showAuthError(data.message); return; }
+
+    portalToken = data.token;
+    portalUser  = data.solicitante;
+    localStorage.setItem('portal_token', portalToken);
+    localStorage.setItem('portal_user',  JSON.stringify(portalUser));
+    initApp();
+  } catch (err) {
+    showAuthError('Error de conexión. Intenta de nuevo.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Iniciar sesión';
+  }
+}
+
+async function doRegister() {
+  clearAuthMsgs();
+  const email = document.getElementById('regEmail').value.trim();
+  const folio = document.getElementById('regFolio').value.trim().toUpperCase();
+  const pass  = document.getElementById('regPass').value;
+  const pass2 = document.getElementById('regPass2').value;
+
+  if (!email || !folio || !pass || !pass2) { showAuthError('Completa todos los campos'); return; }
+  if (pass !== pass2)  { showAuthError('Las contraseñas no coinciden'); return; }
+  if (pass.length < 8) { showAuthError('La contraseña debe tener al menos 8 caracteres'); return; }
+  if (!folio.match(/^MNT-\d{6}$/)) { showAuthError('Folio inválido. Formato: MNT-000001'); return; }
+
+  const btn = document.getElementById('regBtn');
+  btn.disabled = true; btn.textContent = 'Creando cuenta...';
+
+  try {
+    const data = await fetch(`${API}/registro`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, folio, password: pass }),
+    }).then(r => r.json());
+
+    if (!data.ok) { showAuthError(data.message); return; }
+
+    portalToken = data.token;
+    portalUser  = data.solicitante;
+    localStorage.setItem('portal_token', portalToken);
+    localStorage.setItem('portal_user',  JSON.stringify(portalUser));
+    showAuthSuccess(data.mensaje);
+    setTimeout(() => initApp(), 1200);
+  } catch (err) {
+    showAuthError('Error de conexión. Intenta de nuevo.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Crear cuenta';
+  }
+}
+
+function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  localStorage.removeItem('portal_token');
+  localStorage.removeItem('portal_user');
+  location.reload();
+}
+
+/* ══════════════════════════════════════════════════════════
+   APP INIT
+══════════════════════════════════════════════════════════ */
+function initApp() {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  const nombre = portalUser?.nombre || 'Solicitante';
+  document.getElementById('navUserName').textContent = nombre;
+  document.getElementById('navAvatar').textContent = nombre[0].toUpperCase();
+
+  const hr = new Date().getHours();
+  const saludo = hr < 12 ? 'Buenos días' : hr < 19 ? 'Buenas tardes' : 'Buenas noches';
+  document.getElementById('homeGreeting').textContent = `${saludo}, ${nombre.split(' ')[0]} 👋`;
+
+  showPage('home');
+  loadAllData();
+}
+
+/* ══════════════════════════════════════════════════════════
+   PAGE NAVIGATION
+══════════════════════════════════════════════════════════ */
+function showPage(page) {
+  const pages = ['home','solicitud','credito','docs','perfil'];
+  pages.forEach(p => {
+    document.getElementById('page' + p.charAt(0).toUpperCase() + p.slice(1))?.classList.add('hidden');
+    document.getElementById('nav' + p.charAt(0).toUpperCase() + p.slice(1))?.classList.remove('active');
+  });
+  document.getElementById('page' + page.charAt(0).toUpperCase() + page.slice(1))?.classList.remove('hidden');
+  document.getElementById('nav'  + page.charAt(0).toUpperCase() + page.slice(1))?.classList.add('active');
+}
+
+/* ══════════════════════════════════════════════════════════
+   LOAD DATA
+══════════════════════════════════════════════════════════ */
+async function loadAllData() {
+  try {
+    const d = await portalFetch('/solicitudes');
+    const sols = d.solicitudes || [];
+    if (!sols.length) {
+      renderNoSolicitud();
+      return;
+    }
+    // Tomar la solicitud más reciente
+    const sol = sols[0];
+    solicitudData = sol;
+
+    // Cargar detalle completo por folio
+    try {
+      const det = await portalFetch(`/solicitudes/${sol.folio}`);
+      solicitudData = { ...sol, ...det.solicitud };
+      renderHome(det);
+      renderSolicitud(det);
+      if (det.solicitud?.credito_id) {
+        renderCredito(det.solicitud);
+        loadAmortizacion(det.solicitud.credito_id);
+      }
+      loadDocs(sol.id);
+    } catch (e) {
+      renderHome({ solicitud: sol, historial: [], documentos: [] });
+      renderSolicitud({ solicitud: sol, historial: [], documentos: [] });
+    }
+    loadPerfil();
+  } catch (err) {
+    if (err.message.includes('Sesión')) {
+      doLogout();
+    } else {
+      toast(`Error: ${err.message}`, 'error');
+    }
+  }
+}
+
+/* ── HOME ────────────────────────────────────────────────── */
+function renderHome(det) {
+  const sol = det.solicitud;
+
+  // Stat estado
+  document.getElementById('statEstado').innerHTML = badgeHtml(sol.estado);
+
+  // Stat monto
+  document.getElementById('statMonto').textContent = fmtMXN(sol.monto_aprobado || sol.monto_solicitado);
+  document.getElementById('statPlazo').textContent = `${sol.plazo_meses} meses`;
+
+  // Stat pago
+  if (sol.pago_mensual_total) {
+    document.getElementById('statPago').textContent  = fmtMXN(sol.pago_mensual_total);
+    document.getElementById('statSaldo').textContent = `Saldo: ${fmtMXN(sol.saldo_insoluto)}`;
+  } else {
+    document.getElementById('statPago').textContent  = '—';
+    document.getElementById('statSaldo').textContent = 'Pendiente de aprobación';
+  }
+
+  // Progreso del crédito
+  if (sol.credito_id && sol.monto_aprobado && sol.saldo_insoluto !== undefined) {
+    const pagado  = parseFloat(sol.monto_aprobado) - parseFloat(sol.saldo_insoluto);
+    const pct     = Math.max(0, Math.min(100, (pagado / parseFloat(sol.monto_aprobado)) * 100));
+    document.getElementById('cardProgreso').style.display = 'block';
+    document.getElementById('progresoSub').textContent    = `Crédito ${sol.estado_credito || 'ACTIVO'}`;
+    document.getElementById('progresoPct').textContent    = pct.toFixed(1) + '%';
+    document.getElementById('progresoFill').style.width   = pct + '%';
+    document.getElementById('progCapPagado').textContent  = fmtMXN(pagado);
+    document.getElementById('progSaldo').textContent      = fmtMXN(sol.saldo_insoluto);
+
+    // Próximo pago
+    if (sol.fecha_inicio_descuento) {
+      const inicio  = new Date(sol.fecha_inicio_descuento);
+      const mesesPagados = Math.round(pagado / (parseFloat(sol.monto_aprobado) / parseFloat(sol.plazo_meses)));
+      const prox = new Date(inicio);
+      prox.setMonth(prox.getMonth() + mesesPagados);
+      document.getElementById('progProxPago').textContent = fmtDate(prox);
+    }
+  }
+
+  // Timeline
+  const tl = document.getElementById('timelineHome');
+  const hist = det.historial || [];
+  if (!hist.length) {
+    tl.innerHTML = '<div style="color:var(--text-3);padding:12px">Sin historial disponible aún.</div>';
+    return;
+  }
+  tl.innerHTML = hist.slice().reverse().map(h => {
+    const info = ESTADO_INFO[h.estado_nuevo] || { label: h.estado_nuevo };
+    return `<div class="tl-item">
+      <div class="tl-dot"></div>
+      <div class="tl-title">${info.label}</div>
+      <div class="tl-date">${fmtDate(h.created_at)}</div>
+      ${h.comentario ? `<div class="tl-note">${h.comentario}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderNoSolicitud() {
+  document.getElementById('statEstado').innerHTML = '<span style="color:var(--text-3)">Sin solicitudes</span>';
+  document.getElementById('timelineHome').innerHTML =
+    '<div class="empty-state"><div class="empty-icon">📋</div>' +
+    '<div>Aún no tienes solicitudes registradas.<br>' +
+    '<a href="/" style="color:var(--teal);font-weight:600">Solicita tu préstamo aquí</a></div></div>';
+}
+
+/* ── SOLICITUD ───────────────────────────────────────────── */
+function renderSolicitud(det) {
+  const sol = det.solicitud;
+  document.getElementById('solFolioTitle').textContent = sol.folio;
+  document.getElementById('solFechaTitle').textContent = `Solicitud del ${fmtDate(sol.fecha_solicitud)}`;
+  document.getElementById('solEstadoBadge').innerHTML  = badgeHtml(sol.estado);
+
+  document.getElementById('solInfoGrid').innerHTML = `
+    <div class="info-item"><div class="info-label">Empresa</div><div class="info-value">${sol.empresa||'—'}</div></div>
+    <div class="info-item"><div class="info-label">Tipo de crédito</div><div class="info-value">${sol.tipo_credito||'—'}</div></div>
+    <div class="info-item"><div class="info-label">Monto solicitado</div><div class="info-value" style="color:var(--teal)">${fmtMXN(sol.monto_solicitado)}</div></div>
+    <div class="info-item"><div class="info-label">Plazo</div><div class="info-value">${sol.plazo_meses} meses</div></div>
+    <div class="info-item"><div class="info-label">Tipo de nómina</div><div class="info-value">${sol.tipo_nomina||'—'}</div></div>
+    <div class="info-item"><div class="info-label">Ranking</div><div class="info-value">${sol.ranking||'—'}</div></div>
+    ${sol.motivo_rechazo ? `<div class="info-item" style="grid-column:span 2">
+      <div class="info-label" style="color:var(--red)">Motivo de rechazo</div>
+      <div class="info-value" style="color:var(--red)">${sol.motivo_rechazo}</div>
+    </div>` : ''}
+  `;
+
+  // Scoring
+  const pts = {
+    'Ingreso neto':     { val: sol.puntos_ingreso      || 0, max: 50 },
+    'Historial':        { val: sol.puntos_historial     || 0, max: 40 },
+    'Antigüedad':       { val: sol.puntos_antiguedad    || 0, max: 30 },
+    'Cap. de pago':     { val: sol.puntos_capacidad_pago|| 0, max: 30 },
+  };
+  const total = sol.puntaje_total || Object.values(pts).reduce((s,p)=>s+p.val,0);
+  const aprobado = total >= 80;
+
+  document.getElementById('scoringRank').innerHTML =
+    `<span style="font-size:18px;font-weight:800;color:var(--teal)">${total}/140</span>`;
+
+  document.getElementById('scoringBody').innerHTML = `
+    ${Object.entries(pts).map(([k,p]) => `
+      <div class="score-row">
+        <span class="score-name">${k}</span>
+        <div class="score-track">
+          <div class="score-fill" style="width:${p.max>0?(p.val/p.max*100).toFixed(0):0}%"></div>
+        </div>
+        <span class="score-pts">${p.val}/${p.max}</span>
+      </div>`).join('')}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;
+                padding-top:12px;border-top:1px solid var(--border)">
+      <div>
+        <div style="font-size:12px;color:var(--text-3)">Mínimo aprobatorio: 80 pts</div>
+      </div>
+      <div style="text-align:right">
+        <span style="font-size:22px;font-weight:800;color:${aprobado?'var(--green)':'var(--red)'}">
+          ${aprobado ? '✅ Aprobado' : '❌ No aprobado'}
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+/* ── CRÉDITO ─────────────────────────────────────────────── */
+function renderCredito(sol) {
+  if (!sol.credito_id) return;
+  document.getElementById('creditoContent').innerHTML = `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Condiciones del crédito</div>
+          <div class="card-sub">${sol.folio}</div>
+        </div>
+        ${sol.estado_credito ? badgeHtml(sol.estado_credito) : ''}
+      </div>
+      <div class="card-body">
+        <div class="info-grid">
+          <div class="info-item"><div class="info-label">Monto aprobado</div>
+            <div class="info-value" style="font-size:22px;color:var(--teal)">${fmtMXN(sol.monto_aprobado)}</div></div>
+          <div class="info-item"><div class="info-label">Plazo</div>
+            <div class="info-value" style="font-size:22px">${sol.plazo_meses} meses</div></div>
+          <div class="info-item"><div class="info-label">Pago mensual total</div>
+            <div class="info-value">${fmtMXN(sol.pago_mensual_total)}</div></div>
+          <div class="info-item"><div class="info-label">Saldo insoluto</div>
+            <div class="info-value" style="color:var(--amber)">${fmtMXN(sol.saldo_insoluto)}</div></div>
+          <div class="info-item"><div class="info-label">Tasa nominal anual</div>
+            <div class="info-value">${(parseFloat(sol.tasa_nominal_anual||0)*100).toFixed(1)}%</div></div>
+          <div class="info-item"><div class="info-label">CAT</div>
+            <div class="info-value">${(parseFloat(sol.cat_anual||0)*100).toFixed(1)}%</div></div>
+          <div class="info-item"><div class="info-label">Fecha de depósito</div>
+            <div class="info-value">${fmtDate(sol.fecha_desembolso)}</div></div>
+          <div class="info-item"><div class="info-label">Inicio descuentos</div>
+            <div class="info-value">${fmtDate(sol.fecha_inicio_descuento)}</div></div>
+          <div class="info-item"><div class="info-label">Fecha de vencimiento</div>
+            <div class="info-value">${fmtDate(sol.fecha_vencimiento)}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div><div class="card-title">Tabla de amortización</div></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="amortTable">
+          <thead><tr>
+            <th>#</th><th>Fecha pago</th><th>Saldo inicial</th>
+            <th>Capital</th><th>Interés</th><th>IVA</th>
+            <th>Pago total</th><th>Saldo final</th><th>Estado</th>
+          </tr></thead>
+          <tbody id="amortBody"><tr><td colspan="9" style="text-align:center;padding:24px">
+            <div class="loader"></div>
+          </td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function loadAmortizacion(creditoId) {
+  try {
+    const d = await portalFetch(`/creditos/${creditoId}/amortizacion`);
+    const rows = d.amortizacion || [];
+    const tbody = document.getElementById('amortBody');
+    if (!tbody) return;
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:24px">Sin datos de amortización</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => `
+      <tr class="${r.pagado?'pagado':''}">
+        <td class="td-mono">${r.periodo}</td>
+        <td style="font-size:12px">${fmtDate(r.fecha_pago)}</td>
+        <td>${fmtMXN(r.saldo_inicial)}</td>
+        <td style="color:var(--teal)">${fmtMXN(r.capital)}</td>
+        <td>${fmtMXN(r.interes)}</td>
+        <td style="color:var(--text-3)">${fmtMXN(r.iva)}</td>
+        <td style="font-weight:700">${fmtMXN(r.pago_total)}</td>
+        <td>${fmtMXN(r.saldo_insoluto)}</td>
+        <td>${r.pagado
+          ? '<span class="badge activo" style="font-size:10px">✓ Pagado</span>'
+          : '<span style="font-size:11px;color:var(--text-3)">Pendiente</span>'}</td>
+      </tr>`).join('');
+  } catch { /* silencioso */ }
+}
+
+/* ── DOCS ────────────────────────────────────────────────── */
+async function loadDocs(solicitudId) {
+  try {
+    const d = await portalFetch(`/../../expediente/${solicitudId}`);
+    const docs = d.documentos || [];
+    const body = document.getElementById('docsBody');
+    if (!docs.length) {
+      body.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <div>Aún no hay documentos en tu expediente.</div>
+      </div>`;
+      return;
+    }
+    body.innerHTML = docs.map(doc => `
+      <div class="doc-row">
+        <div class="doc-icon">${TIPO_ICONS[doc.tipo]||'📎'}</div>
+        <div class="doc-info">
+          <div class="doc-tipo">${doc.tipo.replace(/_/g,' ')}</div>
+          <div class="doc-name">${doc.nombre_archivo}</div>
+          <div class="doc-meta">${(doc.tamanio_bytes/1024).toFixed(0)} KB · ${fmtDate(doc.created_at)}</div>
+        </div>
+        <div>
+          ${doc.verificado
+            ? '<span class="badge activo" style="font-size:10px">✓ Verificado</span>'
+            : '<span style="font-size:11px;color:var(--amber)">⏳ Por verificar</span>'}
+        </div>
+      </div>`).join('');
+  } catch { /* silencioso */ }
+}
+
+/* ── PERFIL ──────────────────────────────────────────────── */
+async function loadPerfil() {
+  try {
+    const d = await portalFetch('/perfil');
+    const p = d.perfil;
+    document.getElementById('perfilGrid').innerHTML = `
+      <div class="info-item"><div class="info-label">Nombre completo</div>
+        <div class="info-value">${p.nombres} ${p.apellido_pat} ${p.apellido_mat||''}</div></div>
+      <div class="info-item"><div class="info-label">Email</div>
+        <div class="info-value" style="font-size:13px">${p.email}</div></div>
+      <div class="info-item"><div class="info-label">Teléfono</div>
+        <div class="info-value">${p.telefono||'—'}</div></div>
+      <div class="info-item"><div class="info-label">CURP</div>
+        <div class="info-value" style="font-family:monospace;font-size:12px">${p.curp||'—'}</div></div>
+      <div class="info-item"><div class="info-label">RFC</div>
+        <div class="info-value" style="font-family:monospace;font-size:12px">${p.rfc||'—'}</div></div>
+      <div class="info-item"><div class="info-label">Domicilio</div>
+        <div class="info-value" style="font-size:12px">${[p.calle, p.colonia, p.alcaldia_mpio, p.entidad, p.cp].filter(Boolean).join(', ')||'—'}</div></div>
+    `;
+  } catch { /* silencioso */ }
+}
+
+/* ── CAMBIAR CONTRASEÑA ──────────────────────────────────── */
+async function cambiarPassword() {
+  const actual   = document.getElementById('passActual').value;
+  const nueva    = document.getElementById('passNueva').value;
+  const confirma = document.getElementById('passConfirm').value;
+  const err      = document.getElementById('passError');
+  const ok       = document.getElementById('passSuccess');
+
+  err.style.display = ok.style.display = 'none';
+
+  if (!actual || !nueva || !confirma) {
+    err.textContent = 'Completa todos los campos'; err.style.display = 'block'; return;
+  }
+  if (nueva !== confirma) {
+    err.textContent = 'Las contraseñas no coinciden'; err.style.display = 'block'; return;
+  }
+  if (nueva.length < 8) {
+    err.textContent = 'Mínimo 8 caracteres'; err.style.display = 'block'; return;
+  }
+
+  try {
+    await portalFetch('/cambiar-password', {
+      method: 'POST',
+      body: JSON.stringify({ passwordActual: actual, passwordNuevo: nueva }),
+    });
+    ok.textContent = '✅ Contraseña actualizada exitosamente';
+    ok.style.display = 'block';
+    document.getElementById('passActual').value = '';
+    document.getElementById('passNueva').value  = '';
+    document.getElementById('passConfirm').value= '';
+  } catch (e) {
+    err.textContent = e.message; err.style.display = 'block';
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   BOOT
+══════════════════════════════════════════════════════════ */
+if (portalToken && portalUser) {
+  initApp();
+} else {
+  document.getElementById('authScreen').style.display = 'flex';
+}
+</script>
+</body>
+</html>
