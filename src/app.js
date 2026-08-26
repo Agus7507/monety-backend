@@ -7,26 +7,26 @@ const rateLimit  = require('express-rate-limit');
 const logger     = require('./config/logger');
 const { globalErrorHandler } = require('./middleware/errorHandler');
 
-const app    = express();
+const app = express();
+
+app.set('trust proxy', 1);
+
 const PREFIX = process.env.API_PREFIX || '/api/v1';
 
 /* ── Seguridad ────────────────────────────────────────────── */
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "cdnjs.cloudflare.com"],
-      scriptSrcAttr:  ["'unsafe-inline'"],   // permite onclick="..." en el HTML
-      styleSrc:       ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
-      fontSrc:        ["'self'", "fonts.gstatic.com", "fonts.googleapis.com"],
-      imgSrc:         ["'self'", "data:", "https:"],
-      connectSrc:     ["'self'"],
-      frameSrc:       ["'none'"],
-      objectSrc:      ["'none'"],
-    },
-  },
-  crossOriginEmbedderPolicy: false,   // evita problemas con fuentes externas
-}));
+// Helmet simplificado para HTTP (sin HSTS ni headers que fuercen HTTPS)
+if (process.env.NODE_ENV === 'production' && process.env.HTTPS_ENABLED === 'true') {
+  app.use(helmet());
+} else {
+  app.use(helmet({
+    hsts:                      false,
+    crossOriginOpenerPolicy:   false,
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+    originAgentCluster:        false,
+    contentSecurityPolicy:     false,
+  }));
+};
 
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
   .split(',').map(o => o.trim());
