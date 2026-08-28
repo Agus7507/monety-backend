@@ -1246,6 +1246,20 @@
               accept=".jpg,.jpeg,.png,.pdf" onchange="onDocSelected(this,'RECIBO_NOMINA')">
           </label>
 
+          <!-- Constancia SAT -->
+          <label class="doc-upload-item" id="docItem_CONSTANCIA_SAT" for="docInput_CONSTANCIA_SAT">
+            <div class="doc-icon">📑</div>
+            <div class="doc-info">
+              <div class="doc-title">Constancia de situación fiscal (SAT)</div>
+              <div class="doc-sub">Descárgala en sat.gob.mx → Mi portal → Trámites → Constancia de situación fiscal</div>
+              <div class="doc-status" id="docStatus_CONSTANCIA_SAT">Toca para seleccionar archivo</div>
+            </div>
+            <span class="doc-badge-req">Requerido</span>
+            <span class="doc-check">✅</span>
+            <input class="doc-upload-input" type="file" id="docInput_CONSTANCIA_SAT"
+              accept=".jpg,.jpeg,.png,.pdf" onchange="onDocSelected(this,'CONSTANCIA_SAT')">
+          </label>
+
           <!-- CURP (opcional) -->
           <label class="doc-upload-item" id="docItem_CURP" for="docInput_CURP">
             <div class="doc-icon">📄</div>
@@ -1321,14 +1335,82 @@
       <div class="form-success" id="successPage">
         <div class="success-icon">🎉</div>
         <div class="success-title">¡Solicitud enviada con éxito!</div>
-        <p class="success-sub">Tu solicitud ha sido recibida y está en proceso de evaluación. Nuestro equipo se comunicará contigo en las próximas 24 horas.</p>
+        <p class="success-sub">Tu solicitud fue recibida. Un agente de Monety te contactará en menos de <strong>24 horas</strong>.</p>
+
+        <!-- Folio con botón copiar -->
         <div class="success-ticket">
-          <div class="success-ticket-label">Número de folio</div>
-          <div class="success-ticket-num" id="folioNum">#MNT-000000</div>
+          <div class="success-ticket-label">Tu número de folio</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
+            <div class="success-ticket-num" id="folioNum">#MNT-000000</div>
+            <button onclick="copiarFolio()" id="btnCopiar"
+              style="background:var(--teal);color:white;border:none;border-radius:8px;
+                     padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;
+                     font-family:inherit;transition:background .2s;white-space:nowrap;">
+              📋 Copiar folio
+            </button>
+          </div>
+          <div style="font-size:12px;color:var(--teal);margin-top:8px;">
+            Guarda este número para dar seguimiento a tu solicitud
+          </div>
         </div>
+
+        <!-- Pasos siguientes -->
+        <div style="background:white;border-radius:14px;border:1px solid #e2e8f0;
+                    padding:24px;margin:20px 0;text-align:left;max-width:460px;">
+          <div style="font-size:14px;font-weight:700;color:#1a202c;margin-bottom:16px;text-align:center;">
+            ¿Qué sigue?
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <div style="background:var(--teal);color:white;width:26px;height:26px;border-radius:50%;
+                          display:flex;align-items:center;justify-content:center;font-weight:700;
+                          font-size:12px;flex-shrink:0;margin-top:1px;">1</div>
+              <div style="font-size:13px;color:#4a5568;line-height:1.5;">
+                <strong style="color:#1a202c;">Abre tu cuenta Monety</strong><br>
+                Necesitas una cuenta para recibir tu préstamo. Tu folio se copiará automáticamente.
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <div style="background:var(--teal);color:white;width:26px;height:26px;border-radius:50%;
+                          display:flex;align-items:center;justify-content:center;font-weight:700;
+                          font-size:12px;flex-shrink:0;margin-top:1px;">2</div>
+              <div style="font-size:13px;color:#4a5568;line-height:1.5;">
+                <strong style="color:#1a202c;">Espera la llamada de tu asesor</strong><br>
+                Te contactaremos en menos de 24 horas para revisar tu solicitud.
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <div style="background:var(--teal);color:white;width:26px;height:26px;border-radius:50%;
+                          display:flex;align-items:center;justify-content:center;font-weight:700;
+                          font-size:12px;flex-shrink:0;margin-top:1px;">3</div>
+              <div style="font-size:13px;color:#4a5568;line-height:1.5;">
+                <strong style="color:#1a202c;">Revisa tu correo</strong><br>
+                Te enviamos una confirmación con tu folio al email registrado.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botón principal: Abrir cuenta -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+          <button onclick="abrirCuenta()"
+            style="background:var(--teal);color:white;border:none;border-radius:50px;
+                   padding:16px 36px;font-size:16px;font-weight:700;cursor:pointer;
+                   font-family:inherit;display:flex;align-items:center;gap:10px;
+                   box-shadow:0 4px 20px rgba(27,168,150,.35);transition:background .2s;">
+            🏦 Abrir mi cuenta Monety
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+          <div style="font-size:11px;color:#8b949e;">Tu folio se copiará automáticamente al hacer clic</div>
+          <a href="#" onclick="resetForm(); return false;"
+            style="color:var(--gray-light);font-size:13px;margin-top:6px;">
+            Enviar otra solicitud
+          </a>
+        </div>
+
         <div id="scoringResult"></div>
-        <br>
-        <a href="#" class="btn-primary" onclick="resetForm(); return false;">Hacer otra solicitud</a>
       </div>
     </div>
   </div>
@@ -1447,7 +1529,7 @@
 
   // Archivos de documentos seleccionados (tipo → File)
   const docFiles = {};
-  const DOCS_REQUERIDOS_SITIO = ['INE_FRENTE', 'INE_REVERSO', 'COMPROBANTE_DOMICILIO', 'RECIBO_NOMINA'];
+  const DOCS_REQUERIDOS_SITIO = ['INE_FRENTE', 'INE_REVERSO', 'COMPROBANTE_DOMICILIO', 'RECIBO_NOMINA', 'CONSTANCIA_SAT'];
 
   function onDocSelected(input, tipo) {
     const file = input.files[0];
@@ -1504,7 +1586,8 @@
       const faltantes = DOCS_REQUERIDOS_SITIO.filter(t => !docFiles[t])
         .map(t => ({ INE_FRENTE:'INE Frente', INE_REVERSO:'INE Reverso',
                      COMPROBANTE_DOMICILIO:'Comprobante de domicilio',
-                     RECIBO_NOMINA:'Recibo de nómina' }[t]));
+                     RECIBO_NOMINA:'Recibo de nómina',
+                     CONSTANCIA_SAT:'Constancia de situación fiscal' }[t]));
       if (faltantes.length) {
         document.getElementById('docReqMsg').style.display = 'block';
         document.getElementById('docReqList').textContent = 'Faltan: ' + faltantes.join(', ');
@@ -1742,8 +1825,40 @@
     }
   }
 
-  function resetForm() {
-    document.getElementById('successPage').style.display = 'none';
+  function copiarFolio() {
+    const folio = document.getElementById('folioNum')?.textContent?.replace('#','').trim() || '';
+    if (!folio) return;
+    navigator.clipboard.writeText(folio).then(() => {
+      const btn = document.getElementById('btnCopiar');
+      if (btn) {
+        btn.textContent = '✅ ¡Copiado!';
+        btn.style.background = '#3fb950';
+        setTimeout(() => {
+          btn.textContent = '📋 Copiar folio';
+          btn.style.background = '';
+        }, 2500);
+      }
+    }).catch(() => {
+      // Fallback para navegadores sin clipboard API
+      const el = document.createElement('textarea');
+      el.value = folio;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      const btn = document.getElementById('btnCopiar');
+      if (btn) { btn.textContent = '✅ ¡Copiado!'; }
+    });
+  }
+
+  function abrirCuenta() {
+    const folio = document.getElementById('folioNum')?.textContent?.replace('#','').trim() || '';
+    if (folio) {
+      navigator.clipboard.writeText(folio).catch(() => {});
+    }
+    // URL de apertura de cuenta — cambiar cuando esté lista la página
+    window.open('https://monety.mx/abre-tu-cuenta', '_blank');
+  }
     currentStep = 1;
     document.getElementById('page1').classList.add('active');
     updateStepUI();

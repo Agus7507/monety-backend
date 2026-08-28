@@ -1826,7 +1826,7 @@ async function loadDetailData(id, folio) {
       </div>
       <!-- Selector de tipo -->
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="docTipoSelector">
-        ${['INE_FRENTE','INE_REVERSO','CURP','COMPROBANTE_DOMICILIO','RECIBO_NOMINA','ESTADO_CUENTA','OTRO'].map(t =>
+        ${['INE_FRENTE','INE_REVERSO','CURP','COMPROBANTE_DOMICILIO','RECIBO_NOMINA','CONSTANCIA_SAT','ESTADO_CUENTA','OTRO'].map(t =>
           `<button class="plazo-btn${t==='INE_FRENTE'?' active':''}" data-tipo="${t}" onclick="selectDocTipo(this)"
             style="font-size:11px;padding:5px 10px">${t.replace(/_/g,' ')}</button>`
         ).join('')}
