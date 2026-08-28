@@ -39,6 +39,7 @@ const DOCS_REQUERIDOS = [
   { tipo: 'INE_REVERSO',          label: 'INE / IFE (reverso)',          requerido: true  },
   { tipo: 'COMPROBANTE_DOMICILIO',label: 'Comprobante de domicilio',     requerido: true  },
   { tipo: 'RECIBO_NOMINA',        label: 'Recibo de nómina (último)',    requerido: true  },
+  { tipo: 'CONSTANCIA_SAT',       label: 'Constancia de situación fiscal (SAT)', requerido: true  },
   { tipo: 'COMPROBANTE_INGRESOS', label: 'Comprobante de ingresos',      requerido: false },
   { tipo: 'CURP',                 label: 'CURP',                         requerido: false },
   { tipo: 'ESTADO_CUENTA',        label: 'Estado de cuenta bancario',    requerido: false },
@@ -77,7 +78,7 @@ router.post('/:solicitudId/subir',
 
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      
       const resultados = [];
 
       for (let i = 0; i < req.files.length; i++) {
@@ -98,14 +99,14 @@ router.post('/:solicitudId/subir',
           `INSERT INTO documentos
              (solicitud_id, tipo, nombre_archivo, url_storage, tamanio_bytes, mime_type)
            VALUES ($1, $2::tipo_doc_enum, $3, $4, $5, $6)
-           RETURNING id, tipo, nombre_archivo, tamanio_bytes, created_at`,
+           OUTPUT INSERTED.id, tipo, nombre_archivo, tamanio_bytes, created_at`,
           [solicitudId, tipo, file.originalname, url, sizeBytes, mimeType]
         );
 
         resultados.push(rows[0]);
       }
 
-      await client.query('COMMIT');
+      await client.commit();
       logger.info('Documentos subidos', { solicitudId, cantidad: resultados.length });
 
       res.status(201).json({
@@ -114,7 +115,7 @@ router.post('/:solicitudId/subir',
         documentos: resultados,
       });
     } catch (err) {
-      await client.query('ROLLBACK');
+      await client.rollback();
       next(err);
     } finally {
       client.release();
@@ -227,7 +228,7 @@ router.patch('/:solicitudId/:docId/verificar',
          SET verificado = $1,
              verificado_por = $2
          WHERE id=$3 AND solicitud_id=$4
-         RETURNING id, tipo, verificado`,
+         OUTPUT INSERTED.id, tipo, verificado`,
         [verificado, verificado ? req.user.id : null, docId, solicitudId]
       );
 
