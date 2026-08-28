@@ -9,7 +9,7 @@ const logger = require('../config/logger');
 async function crear(req, res, next) {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    // transaction started;
 
     const {
       // Personales
@@ -45,8 +45,8 @@ async function crear(req, res, next) {
          apellido_pat = EXCLUDED.apellido_pat,
          apellido_mat = EXCLUDED.apellido_mat,
          telefono     = EXCLUDED.telefono,
-         updated_at   = NOW()
-       RETURNING id`,
+         updated_at   = SYSDATETIMEOFFSET()
+       OUTPUT INSERTED.id`,
       [nombres, apellidoPat, apellidoMat, edad, curp?.toUpperCase(),
        rfc?.toUpperCase(), email, telefono, calle, colonia, alcaldiaMpio, entidad, cp]
     );
@@ -58,6 +58,7 @@ async function crear(req, res, next) {
     const antiguedadAnos = (baja - ingreso) / (365.25 * 24 * 3600 * 1000);
 
     /* 3. Crear la solicitud */
+    // SQL Server no soporta RETURNING — usamos OUTPUT en su lugar
     const solId = await client.query(
       `INSERT INTO solicitudes
          (solicitante_id, empresa_id, tipo_credito, tipo_nomina,
@@ -71,11 +72,10 @@ async function crear(req, res, next) {
           tiene_deudas, tipo_deuda, pago_mensual_deudas,
           tiene_infonavit, tipo_desc_infonavit, monto_infonavit,
           previo_monety, autoriza_descuento, num_dependientes,
-          area, puesto,
-          ip_origen)
+          area, puesto, ip_origen)
+       OUTPUT INSERTED.id, INSERTED.folio
        VALUES
-         ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
-       RETURNING id, folio`,
+         ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
       [solicitanteId, empresaId, tipoCredito, tipoNomina,
        fechaIngresoEmp, fechaBajaEstim,
        salarioBruto, salarioNeto,
@@ -99,17 +99,38 @@ async function crear(req, res, next) {
     );
     const { id: solicitudId, folio } = solId.rows[0];
 
-    /* 4. Scoring automático — usa el ingreso efectivo (salario + percepciones) */
-    const scoring = evaluar({
-      salarioNeto:    ingresoNetoEfectivo,
-      historial:      historialCrediticio,
-      antiguedadAnos,
-      montoSolicitado: parseFloat(montoSolicitado),
-      plazoMeses:     parseInt(plazoMeses),
-      gastos:         parseFloat(gastos),
-      pagoDeudas:     parseFloat(pagoMensualDeudas),
-      tipoCredito,
-    });
+    /* 4. Scoring — DESHABILITADO TEMPORALMENTE
+       El analista aprueba manualmente todas las solicitudes.
+       Las solicitudes quedan en estado PENDIENTE. */
+    const SCORING_HABILITADO = process.env.SCORING_HABILITADO === 'true'; // false por defecto
+
+    let scoring = null;
+    if (SCORING_HABILITADO) {
+      scoring = evaluar({
+        salarioNeto:    ingresoNetoEfectivo,
+        historial:      historialCrediticio,
+        antiguedadAnos,
+        montoSolicitado: parseFloat(montoSolicitado),
+        plazoMeses:     parseInt(plazoMeses),
+        gastos:         parseFloat(gastos),
+        pagoDeudas:     parseFloat(pagoMensualDeudas),
+        tipoCredito,
+      });
+    } else {
+      // Scoring dummy — calcula los datos financieros pero no aprueba automáticamente
+      scoring = evaluar({
+        salarioNeto:    ingresoNetoEfectivo,
+        historial:      historialCrediticio,
+        antiguedadAnos,
+        montoSolicitado: parseFloat(montoSolicitado),
+        plazoMeses:     parseInt(plazoMeses),
+        gastos:         parseFloat(gastos),
+        pagoDeudas:     parseFloat(pagoMensualDeudas),
+        tipoCredito,
+      });
+      // Forzar que nunca se apruebe automáticamente
+      scoring.aprobado = false;
+    }
 
     /* 5. Guardar evaluación */
     await client.query(
@@ -129,46 +150,52 @@ async function crear(req, res, next) {
         scoring.puntos.historial,
         scoring.puntos.antiguedad,
         scoring.puntos.capacidadPago,
-        ingresoNetoEfectivo,   // ingreso_neto_calculado (salario + percepciones)
+        ingresoNetoEfectivo,
         scoring.financiero.flujoDisponible,
         scoring.financiero.capacidadPago,
         scoring.financiero.ratio,
         scoring.financiero.mesesCreditoVsSalario,
         scoring.financiero.mesesRiesgo,
         scoring.ranking,
-        scoring.aprobado ? 'APROBADO' : 'RECHAZADO',
-        scoring.motivoRechazo,
+        'EN_REVISION',   // siempre EN_REVISION cuando scoring está deshabilitado
+        null,
       ]
     );
 
-    /* 6. Actualizar estado de la solicitud según resultado */
+    /* 6. Estado siempre PENDIENTE cuando scoring está deshabilitado */
     await client.query(
-      `UPDATE solicitudes SET estado=$1 WHERE id=$2`,
-      [scoring.aprobado ? 'PRE_APROBADA' : 'EN_REVISION', solicitudId]
+      `UPDATE solicitudes SET estado='PENDIENTE' WHERE id=$1`,
+      [solicitudId]
     );
 
-    await client.query('COMMIT');
+    await client.commit();
+    logger.info('Solicitud creada', { folio, scoring_habilitado: SCORING_HABILITADO });
 
-    logger.info('Solicitud creada', { folio, aprobado: scoring.aprobado });
+    // Email de confirmación
+    const emailService = require('../services/emailService');
+    emailService.enviarConfirmacionSolicitud({
+      email:  email,
+      nombre: `${nombres} ${apellidoPat}`,
+      folio,
+      monto:  montoSolicitado,
+      plazo:  plazoMeses,
+    }).catch(err => logger.warn('Email confirmacion fallido', { error: err.message }));
 
     res.status(201).json({
       ok: true,
       folio,
-      estado:   scoring.aprobado ? 'PRE_APROBADA' : 'EN_REVISION',
+      estado:  'PENDIENTE',
       scoring: {
-        aprobado:    scoring.aprobado,
+        aprobado:    false,
         ranking:     scoring.ranking,
         puntaje:     scoring.puntajeTotal,
         pagoMensual: scoring.financiero.pagoMensual,
         totalPagar:  scoring.financiero.totalPagar,
-        motivoRechazo: scoring.motivoRechazo,
       },
-      mensaje: scoring.aprobado
-        ? '¡Tu solicitud fue pre-aprobada! Un agente te contactará pronto.'
-        : 'Tu solicitud está en revisión. Te informaremos en 24 horas.',
+      mensaje: 'Tu solicitud fue recibida exitosamente. Un agente te contactará en menos de 24 horas.',
     });
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.rollback();
     next(err);
   } finally {
     client.release();
@@ -196,10 +223,10 @@ async function consultarEstado(req, res, next) {
          p.nombres, p.apellido_pat, p.apellido_mat,
          p.email, p.telefono, p.curp,
          p.entidad, p.alcaldia_mpio,
-         CONCAT(p.nombres,' ',p.apellido_pat,' ',COALESCE(p.apellido_mat,'')) AS nombre,
+         TRIM(p.nombres + ' ' + p.apellido_pat + ' ' + ISNULL(p.apellido_mat,'')) AS nombre,
          -- Empresa (LEFT JOIN por si empresa_id no existe aún)
          e.id AS empresa_id_val,
-         COALESCE(e.nombre, 'Sin empresa') AS empresa_nombre,
+         ISNULL(e.nombre, 'Sin empresa') AS empresa_nombre,
          -- Evaluación
          ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
          ev.puntos_ingreso, ev.puntos_historial,
@@ -241,7 +268,7 @@ async function listar(req, res, next) {
     }
     if (empresa) {
       params.push(`%${empresa}%`);
-      conditions.push(`e.nombre ILIKE $${params.length}`);
+      conditions.push(`e.nombre LIKE $${params.length}`);
     }
 
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -252,9 +279,9 @@ async function listar(req, res, next) {
          s.id, s.folio, s.estado, s.fecha_solicitud, s.tipo_credito,
          s.monto_solicitado, s.plazo_meses,
          s.salario_mensual_neto, s.historial_crediticio, s.antiguedad_anos,
-         CONCAT(p.nombres,' ',p.apellido_pat) AS nombre,
+         p.nombres + ' ' + p.apellido_pat AS nombre,
          p.email, p.telefono,
-         COALESCE(e.nombre, 'Sin empresa') AS empresa,
+         ISNULL(e.nombre, 'Sin empresa') AS empresa,
          ev.ranking, ev.puntaje_total, ev.resultado
        FROM solicitudes s
        JOIN solicitantes p         ON p.id = s.solicitante_id
@@ -308,9 +335,9 @@ async function obtener(req, res, next) {
          p.nombres, p.apellido_pat, p.apellido_mat,
          p.email, p.telefono, p.curp, p.rfc,
          p.calle, p.colonia, p.alcaldia_mpio, p.entidad, p.cp,
-         TRIM(CONCAT(p.nombres,' ',p.apellido_pat,' ',COALESCE(p.apellido_mat,''))) AS nombre,
+         TRIM(p.nombres + ' ' + p.apellido_pat + ' ' + ISNULL(p.apellido_mat,'')) AS nombre,
          -- Empresa
-         COALESCE(e.nombre,'Sin empresa') AS empresa_nombre,
+         ISNULL(e.nombre,'Sin empresa') AS empresa_nombre,
          -- Evaluación
          ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
          ev.puntos_ingreso, ev.puntos_historial,
@@ -360,7 +387,7 @@ async function obtener(req, res, next) {
 async function cambiarEstado(req, res, next) {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    // transaction started;
     const { id } = req.params;
     const {
       estado, comentario,
@@ -372,14 +399,16 @@ async function cambiarEstado(req, res, next) {
 
     // 1. Actualizar estado de la solicitud
     const { rows } = await client.query(
-      `UPDATE solicitudes SET estado=$1, atendida_por=$2, updated_at=NOW()
-       WHERE id=$3 RETURNING folio, estado, monto_solicitado, plazo_meses,
-             tipo_credito, tipo_nomina`,
+      `UPDATE solicitudes
+       SET estado=$1, atendida_por=$2, updated_at=SYSDATETIMEOFFSET()
+       OUTPUT INSERTED.folio, INSERTED.estado, INSERTED.monto_solicitado,
+              INSERTED.plazo_meses, INSERTED.tipo_credito, INSERTED.tipo_nomina
+       WHERE id=$3`,
       [estado, req.user.id, id]
     );
 
     if (!rows.length) {
-      await client.query('ROLLBACK');
+      await client.rollback();
       return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
     }
 
@@ -416,7 +445,7 @@ async function cambiarEstado(req, res, next) {
           if (evalRows[0].resultado !== 'APROBADO') {
             await client.query(
               `UPDATE evaluaciones SET resultado='APROBADO', motivo_rechazo=NULL,
-               fecha_evaluacion=NOW() WHERE id=$1`,
+               fecha_evaluacion=SYSDATETIMEOFFSET() WHERE id=$1`,
               [evalId]
             );
           }
@@ -430,7 +459,7 @@ async function cambiarEstado(req, res, next) {
              FROM solicitudes s WHERE s.id=$1`, [id]
           );
           if (!solData.length) {
-            await client.query('ROLLBACK');
+            await client.rollback();
             return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
           }
           const sd = solData[0];
@@ -453,7 +482,7 @@ async function cambiarEstado(req, res, next) {
                 meses_credito_vs_salario, meses_riesgo_recuperar,
                 ranking, resultado, motivo_rechazo)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'APROBADO',NULL)
-             RETURNING id`,
+             OUTPUT INSERTED.id`,
             [id, req.user.id,
              sc.puntos.ingreso, sc.puntos.historial, sc.puntos.antiguedad, sc.puntos.capacidadPago,
              sc.financiero.flujoDisponible, sc.financiero.capacidadPago, sc.financiero.ratio,
@@ -488,6 +517,18 @@ async function cambiarEstado(req, res, next) {
         const vencimiento = new Date(desembolso);
         vencimiento.setMonth(vencimiento.getMonth() + plazoFinal);
 
+        // fecha_inicio_descuento: cuándo empieza el descuento en nómina
+        // Si no se especifica, se usa el primer día del mes siguiente al desembolso
+        let fechaInicioDesc;
+        if (req.body.fecha_inicio_descuento) {
+          fechaInicioDesc = req.body.fecha_inicio_descuento;
+        } else {
+          const d = new Date(desembolso);
+          d.setDate(1);
+          d.setMonth(d.getMonth() + 1);
+          fechaInicioDesc = d.toISOString().slice(0, 10);
+        }
+
         // Insertar crédito
         const { rows: cRows } = await client.query(
           `INSERT INTO creditos
@@ -497,9 +538,10 @@ async function cambiarEstado(req, res, next) {
               comision_apertura, cuota_administracion, seguro_desempleo,
               pago_mensual_capital_interes, pago_mensual_total,
               total_intereses, total_iva, monto_total_pagar,
-              saldo_insoluto, fecha_desembolso, fecha_vencimiento)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-           RETURNING id`,
+              saldo_insoluto, fecha_desembolso, fecha_vencimiento,
+              fecha_inicio_descuento)
+           OUTPUT INSERTED.id
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
           [id, evalId,
            montoFinal, plazoFinal,
            tasaFinal, tasaAnual, cat, iva,
@@ -511,7 +553,8 @@ async function cambiarEstado(req, res, next) {
            Math.round(totalPagar     * 100) / 100,
            montoFinal,
            desembolso.toISOString().slice(0, 10),
-           vencimiento.toISOString().slice(0, 10)]
+           vencimiento.toISOString().slice(0, 10),
+           fechaInicioDesc]
         );
         creditoId = cRows[0].id;
 
@@ -521,7 +564,7 @@ async function cambiarEstado(req, res, next) {
           monto:       montoFinal,
           plazo:       plazoFinal,
           tipoCredito: sol.tipo_credito,
-          fechaInicio: desembolso.toISOString().slice(0, 10),
+          fechaInicio: fechaInicioDesc,
         });
 
         for (const row of tabla) {
@@ -542,8 +585,76 @@ async function cambiarEstado(req, res, next) {
       }
     }
 
-    await client.query('COMMIT');
+    await client.commit();
     logger.info('Estado cambiado', { id, estado, agente: req.user.email });
+
+    // ── Notificaciones por email (no bloquean la respuesta) ──
+    try {
+      const emailSvc = require('../services/emailService');
+      // Obtener email y nombre del solicitante
+      const { rows: solInfo } = await db(
+        `SELECT p.email, TRIM(p.nombres + ' ' + p.apellido_pat) AS nombre,
+                c.monto_aprobado, c.plazo_meses, c.pago_mensual_total,
+                c.tasa_nominal_anual, c.cat_anual,
+                c.fecha_desembolso, c.fecha_inicio_descuento,
+                ev.motivo_rechazo, ev.ranking
+         FROM solicitudes s
+         JOIN solicitantes p ON p.id = s.solicitante_id
+         LEFT JOIN creditos c ON c.solicitud_id = s.id
+         LEFT JOIN evaluaciones ev ON ev.solicitud_id = s.id
+         WHERE s.id = $1`, [id]
+      );
+
+      if (solInfo.length && solInfo[0].email) {
+        const info  = solInfo[0];
+        const folio = sol.folio;
+
+        if (estado === 'APROBADA') {
+          emailSvc.enviarAprobacion({
+            email:          info.email,
+            nombre:         info.nombre,
+            folio,
+            monto:          info.monto_aprobado,
+            plazo:          info.plazo_meses,
+            pagoMensual:    info.pago_mensual_total,
+            tasaAnual:      info.tasa_nominal_anual,
+            cat:            info.cat_anual,
+            fechaDesembolso:info.fecha_desembolso,
+            fechaInicioDesc:info.fecha_inicio_descuento,
+          }).catch(e => logger.warn('Email aprobacion fallido', { error: e.message }));
+
+        } else if (estado === 'PRE_APROBADA') {
+          emailSvc.enviarPreAprobacion({
+            email:      info.email,
+            nombre:     info.nombre,
+            folio,
+            monto:      sol.monto_solicitado,
+            plazo:      sol.plazo_meses,
+            pagoMensual:info.pago_mensual_total || 0,
+            ranking:    info.ranking || '—',
+          }).catch(e => logger.warn('Email pre-aprobacion fallido', { error: e.message }));
+
+        } else if (estado === 'RECHAZADA') {
+          emailSvc.enviarRechazo({
+            email:         info.email,
+            nombre:        info.nombre,
+            folio,
+            motivoRechazo: info.motivo_rechazo || comentario || null,
+          }).catch(e => logger.warn('Email rechazo fallido', { error: e.message }));
+
+        } else if (['EN_REVISION', 'CANCELADA'].includes(estado)) {
+          emailSvc.enviarCambioEstado({
+            email:     info.email,
+            nombre:    info.nombre,
+            folio,
+            estado,
+            comentario: comentario || null,
+          }).catch(e => logger.warn('Email cambio-estado fallido', { error: e.message }));
+        }
+      }
+    } catch (emailErr) {
+      logger.warn('Error preparando notificación email', { error: emailErr.message });
+    }
 
     res.json({
       ok: true,
@@ -555,7 +666,7 @@ async function cambiarEstado(req, res, next) {
         : undefined,
     });
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.rollback();
     next(err);
   } finally {
     client.release();
@@ -568,7 +679,7 @@ async function cambiarEstado(req, res, next) {
 async function evaluarSolicitud(req, res, next) {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    // transaction started;
     const { id } = req.params;
 
     const { rows } = await client.query(
@@ -613,7 +724,7 @@ async function evaluarSolicitud(req, res, next) {
          ratio_capacidad_pago=$9, meses_credito_vs_salario=$10,
          meses_riesgo_recuperar=$11, ranking=$12,
          resultado=$13, motivo_rechazo=$14,
-         fecha_evaluacion=NOW()`,
+         fecha_evaluacion=SYSDATETIMEOFFSET()`,
       [id, req.user.id,
        scoring.puntos.ingreso, scoring.puntos.historial,
        scoring.puntos.antiguedad, scoring.puntos.capacidadPago,
@@ -625,10 +736,10 @@ async function evaluarSolicitud(req, res, next) {
        scoring.motivoRechazo]
     );
 
-    await client.query('COMMIT');
+    await client.commit();
     res.json({ ok: true, scoring });
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.rollback();
     next(err);
   } finally {
     client.release();
