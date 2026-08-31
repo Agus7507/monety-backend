@@ -432,8 +432,48 @@
         Iniciar sesión
       </button>
       <div class="auth-switch">
+        ¿Olvidaste tu contraseña?
+        <a onclick="showTab('forgot')">Recupérala aquí</a>
+      </div>
+      <div class="auth-switch" style="margin-top:6px">
         ¿No tienes cuenta?
         <a onclick="showTab('register')">Crea una aquí</a>
+      </div>
+    </div>
+
+    <!-- FORGOT PASSWORD FORM -->
+    <div id="formForgot" class="hidden">
+      <div class="auth-title">Recuperar contraseña</div>
+      <div class="auth-sub">Te enviaremos un enlace a tu correo para restablecer tu contraseña.</div>
+      <div class="form-group">
+        <label class="form-label">Correo electrónico</label>
+        <input type="email" class="form-input" id="forgotEmail"
+          placeholder="tu@correo.com" autocomplete="email"
+          onkeydown="if(event.key==='Enter')doForgotPassword()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Folio de tu solicitud</label>
+        <input type="text" class="form-input" id="forgotFolio"
+          placeholder="MNT-000001" style="font-family:monospace;text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase()"
+          onkeydown="if(event.key==='Enter')doForgotPassword()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nueva contraseña</label>
+        <input type="password" class="form-input" id="forgotPass"
+          placeholder="Mínimo 8 caracteres">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar nueva contraseña</label>
+        <input type="password" class="form-input" id="forgotPass2"
+          placeholder="Repite la contraseña"
+          onkeydown="if(event.key==='Enter')doForgotPassword()">
+      </div>
+      <button class="btn-primary" id="forgotBtn" onclick="doForgotPassword()">
+        Cambiar contraseña
+      </button>
+      <div class="auth-switch">
+        <a onclick="showTab('login')">← Volver a iniciar sesión</a>
       </div>
     </div>
 
@@ -760,13 +800,49 @@ const TIPO_ICONS = {
    AUTH
 ══════════════════════════════════════════════════════════ */
 function showTab(tab) {
-  const isLogin = tab === 'login';
-  document.getElementById('formLogin').classList.toggle('hidden', !isLogin);
-  document.getElementById('formRegister').classList.toggle('hidden', isLogin);
+  const isLogin    = tab === 'login';
+  const isRegister = tab === 'register';
+  const isForgot   = tab === 'forgot';
+  document.getElementById('formLogin').classList.toggle('hidden',    !isLogin);
+  document.getElementById('formRegister').classList.toggle('hidden', !isRegister);
+  document.getElementById('formForgot').classList.toggle('hidden',   !isForgot);
   document.querySelectorAll('.auth-tab').forEach((t, i) => {
-    t.classList.toggle('active', isLogin ? i===0 : i===1);
+    t.classList.toggle('active', isLogin ? i===0 : isRegister ? i===1 : false);
   });
   clearAuthMsgs();
+}
+
+async function doForgotPassword() {
+  clearAuthMsgs();
+  const email  = document.getElementById('forgotEmail').value.trim();
+  const folio  = document.getElementById('forgotFolio').value.trim().toUpperCase();
+  const pass   = document.getElementById('forgotPass').value;
+  const pass2  = document.getElementById('forgotPass2').value;
+
+  if (!email || !folio) { showAuthError('Ingresa tu email y folio'); return; }
+  if (!pass || !pass2)   { showAuthError('Ingresa la nueva contraseña'); return; }
+  if (pass !== pass2)    { showAuthError('Las contraseñas no coinciden'); return; }
+  if (pass.length < 8)   { showAuthError('Mínimo 8 caracteres'); return; }
+  if (!folio.match(/^MNT-\d{6}$/)) { showAuthError('Folio inválido. Formato: MNT-000001'); return; }
+
+  const btn = document.getElementById('forgotBtn');
+  btn.disabled = true; btn.textContent = 'Procesando...';
+
+  try {
+    const res  = await fetch(`${API}/recuperar-password`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email, folio, passwordNuevo: pass }),
+    });
+    const data = await res.json();
+    if (!data.ok) { showAuthError(data.message); return; }
+    showAuthSuccess('✅ Contraseña actualizada. Ya puedes iniciar sesión.');
+    setTimeout(() => showTab('login'), 2000);
+  } catch {
+    showAuthError('Error de conexión. Intenta de nuevo.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Cambiar contraseña';
+  }
 }
 
 function clearAuthMsgs() {
@@ -916,7 +992,10 @@ async function loadAllData() {
         renderCredito(det.solicitud);
         loadAmortizacion(det.solicitud.credito_id);
       }
-      loadDocs(sol.id);
+      // Cargar documentos usando el UUID de la solicitud
+      if (det.solicitud?.id) {
+        loadDocs(det.solicitud.id);
+      }
     } catch (e) {
       renderHome({ solicitud: sol, historial: [], documentos: [] });
       renderSolicitud({ solicitud: sol, historial: [], documentos: [] });
@@ -1135,32 +1214,50 @@ async function loadAmortizacion(creditoId) {
 
 /* ── DOCS ────────────────────────────────────────────────── */
 async function loadDocs(solicitudId) {
+  const body = document.getElementById('docsBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:24px"><div class="loader"></div></div>';
   try {
-    const d = await portalFetch(`/../../expediente/${solicitudId}`);
+    // Usar el endpoint del portal que ya tiene autenticación
+    const d = await portalFetch(`/documentos/${solicitudId}`);
     const docs = d.documentos || [];
-    const body = document.getElementById('docsBody');
     if (!docs.length) {
       body.innerHTML = `<div class="empty-state">
         <div class="empty-icon">📭</div>
-        <div>Aún no hay documentos en tu expediente.</div>
+        <div>Aún no hay documentos en tu expediente.<br>
+          <span style="font-size:12px;color:var(--text-3)">Contacta a tu asesor si necesitas agregar documentos.</span>
+        </div>
       </div>`;
       return;
     }
+    const TIPO_LABELS = {
+      INE_FRENTE:'INE / IFE (Frente)', INE_REVERSO:'INE / IFE (Reverso)',
+      CURP:'CURP', RFC:'RFC', COMPROBANTE_DOMICILIO:'Comprobante de domicilio',
+      COMPROBANTE_INGRESOS:'Comprobante de ingresos', RECIBO_NOMINA:'Recibo de nómina',
+      ESTADO_CUENTA:'Estado de cuenta', CONSTANCIA_SAT:'Constancia de situación fiscal',
+      CONTRATO_LABORAL:'Contrato laboral', CONTRATO_CREDITO:'Contrato de crédito',
+      OTRO:'Otro documento',
+    };
     body.innerHTML = docs.map(doc => `
       <div class="doc-row">
         <div class="doc-icon">${TIPO_ICONS[doc.tipo]||'📎'}</div>
         <div class="doc-info">
-          <div class="doc-tipo">${doc.tipo.replace(/_/g,' ')}</div>
+          <div class="doc-tipo">${TIPO_LABELS[doc.tipo] || doc.tipo.replace(/_/g,' ')}</div>
           <div class="doc-name">${doc.nombre_archivo}</div>
-          <div class="doc-meta">${(doc.tamanio_bytes/1024).toFixed(0)} KB · ${fmtDate(doc.created_at)}</div>
+          <div class="doc-meta">${doc.tamanio_bytes ? (doc.tamanio_bytes/1024).toFixed(0)+' KB · ' : ''}${fmtDate(doc.created_at)}</div>
         </div>
-        <div>
+        <div style="flex-shrink:0">
           ${doc.verificado
             ? '<span class="badge activo" style="font-size:10px">✓ Verificado</span>'
-            : '<span style="font-size:11px;color:var(--amber)">⏳ Por verificar</span>'}
+            : '<span style="font-size:11px;color:var(--amber);font-weight:500">⏳ En revisión</span>'}
         </div>
       </div>`).join('');
-  } catch { /* silencioso */ }
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📭</div>
+      <div>Sin documentos registrados en tu expediente.</div>
+    </div>`;
+  }
 }
 
 /* ── PERFIL ──────────────────────────────────────────────── */

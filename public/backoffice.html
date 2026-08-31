@@ -1629,7 +1629,8 @@ async function loadEmpresas() {
 /* ══════════════════════════════════════════════════════════
    DETAIL PANEL
 ══════════════════════════════════════════════════════════ */
-let currentSolId = null;
+let currentSolId   = null;
+let currentSolData = null; // datos completos de la solicitud activa para recálculos
 
 function openDetail(id, folio) {
   // id = UUID cuando viene de la tabla, folio = MNT-XXXXXX siempre
@@ -1717,7 +1718,14 @@ async function loadDetailData(id, folio) {
     return { periodo: i+1, capital: cap, interes: int, iva, pago, saldo: Math.max(0,saldo) };
   });
 
-  // Valores mostrados (reales o calculados)
+  // Guardar datos completos para recálculos (liquidación con nueva fecha)
+  currentSolData = sol;
+
+  // Nombre completo — usar campo nombre si existe, sino construirlo
+  const nombreCompleto = sol.nombre ||
+    [sol.nombres, sol.apellido_pat, sol.apellido_mat].filter(Boolean).join(' ') || '—';
+
+  // Valores mostrados
   const salarioNeto = parseFloat(sol.salario_mensual_neto) || 0;
   const antiguedad  = sol.antiguedad_anos ? Number(sol.antiguedad_anos).toFixed(1)+' años' : '—';
   const historial   = sol.historial_crediticio || '—';
@@ -1730,7 +1738,7 @@ async function loadDetailData(id, folio) {
     <div class="detail-tab-content active" id="dtab-main" style="padding:20px 24px;">
       <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Solicitante</div>
       <div class="info-grid">
-        <div class="info-item"><div class="info-label">Nombre completo</div><div class="info-value">${sol.nombre || '—'}</div></div>
+        <div class="info-item"><div class="info-label">Nombre completo</div><div class="info-value">${nombreCompleto}</div></div>
         <div class="info-item"><div class="info-label">Email</div><div class="info-value" style="font-size:12px">${email}</div></div>
         <div class="info-item"><div class="info-label">Teléfono</div><div class="info-value">${telefono}</div></div>
         <div class="info-item"><div class="info-label">Empresa</div><div class="info-value">${empresa}</div></div>
@@ -2065,7 +2073,7 @@ function calcularLiquidacionLFT(salarioBruto, antiguedadAnos, fechaIngreso) {
   // Prima vacacional proporcional (Art. 80 LFT - 25% mínimo)
   const primaVacacProp  = vacacionesProp * 0.25;
 
-  // ── Totales ──
+  // ── Totales liquidación ──
   const subtotalIndem   = tresMeses + veinteDiasPorAnio;
   const subtotalPrimas  = primaAntiguedad;
   const subtotalPropor  = aguinaldoProp + vacacionesProp + primaVacacProp;
@@ -2073,183 +2081,274 @@ function calcularLiquidacionLFT(salarioBruto, antiguedadAnos, fechaIngreso) {
   const montoMaxPrestamo= totalLiquidacion * PCT_MAX_PRESTAMO;
 
   return {
-    salarioDiario,
-    salarioDiarioTope,
-    anos,
-    diasVac: Math.round(diasVac),
-    tresMeses,
-    veinteDiasPorAnio,
-    primaAntiguedad,
-    aguinaldoProp,
-    vacacionesProp,
-    primaVacacProp,
-    subtotalIndem,
-    subtotalPrimas,
-    subtotalPropor,
-    totalLiquidacion,
-    montoMaxPrestamo,
-    pctUsado: 0, // se calcula al comparar con el crédito
+    salarioDiario, salarioDiarioTope, anos, diasVac: Math.round(diasVac),
+    tresMeses, veinteDiasPorAnio, primaAntiguedad,
+    aguinaldoProp, vacacionesProp, primaVacacProp,
+    subtotalIndem, subtotalPrimas, subtotalPropor,
+    totalLiquidacion, montoMaxPrestamo, pctUsado: 0,
   };
 }
 
 /**
- * Genera el HTML de la pestaña Liquidación para el panel de detalle.
+ * Calcula el FINIQUITO (renuncia voluntaria o mutuo acuerdo).
+ * Solo incluye partes proporcionales — sin indemnización constitucional.
+ * @param {number} salarioBruto
+ * @param {number} antiguedadAnos
+ * @param {Date|string} fechaSalida - fecha efectiva de salida
+ */
+function calcularFiniquitoLFT(salarioBruto, antiguedadAnos, fechaSalida) {
+  const fechaBaja    = fechaSalida ? new Date(fechaSalida) : new Date();
+  const salarioDiario = (salarioBruto || 0) / 30;
+  const anos          = parseFloat(antiguedadAnos || 0);
+  const mesesFrac     = anos * 12;
+
+  // Días trabajados en el año en curso (desde 1 enero hasta fecha de salida)
+  const inicioAnio  = new Date(fechaBaja.getFullYear(), 0, 1);
+  const diasEnAnio  = Math.floor((fechaBaja - inicioAnio) / (1000 * 60 * 60 * 24));
+
+  // ── 1. Aguinaldo proporcional (Art. 87 LFT — 15 días mínimo) ──
+  const aguinaldoProp = salarioDiario * 15 * (diasEnAnio / 365);
+
+  // ── 2. Vacaciones proporcionales (Art. 76 LFT) ──
+  function diasVacaciones(a) {
+    if (a < 1)  return 6 * a;
+    if (a < 2)  return 6;
+    if (a < 3)  return 8;
+    if (a < 4)  return 10;
+    if (a < 5)  return 12;
+    if (a < 10) return 14 + Math.floor(a - 5) * 2;
+    if (a < 15) return 22 + Math.floor(a - 10) * 2;
+    return 32;
+  }
+  const diasVac        = diasVacaciones(anos);
+  const fracAnioActual = (mesesFrac % 12) / 12;
+  const vacacionesProp = salarioDiario * diasVac * fracAnioActual;
+
+  // ── 3. Prima vacacional proporcional (Art. 80 LFT — 25% mínimo) ──
+  const primaVacacProp = vacacionesProp * 0.25;
+
+  // ── 4. Prima de antigüedad (Art. 162 LFT — solo si >= 15 años o incapacidad) ──
+  // En renuncia voluntaria aplica si tiene >= 15 años
+  const topePrimaAntig  = Math.min(salarioDiario, 2 * SALARIO_MINIMO_DIARIO);
+  const primaAntiguedad = anos >= 15 ? topePrimaAntig * 12 * anos : 0;
+
+  // ── 5. Días de salario pendientes ──
+  // Los días del último periodo trabajado (si el pago es quincenal/semanal puede haber días pendientes)
+  // Se deja en 0 — el analista puede ajustarlo manualmente
+  const diasPendientes = 0;
+  const salariosDevengados = salarioDiario * diasPendientes;
+
+  const totalFiniquito   = aguinaldoProp + vacacionesProp + primaVacacProp +
+                           primaAntiguedad + salariosDevengados;
+  const montoMaxPrestamo = totalFiniquito * PCT_MAX_PRESTAMO;
+
+  return {
+    salarioDiario, anos, diasVac: Math.round(diasVac), diasEnAnio,
+    aguinaldoProp, vacacionesProp, primaVacacProp,
+    primaAntiguedad, primaAntigApplica: anos >= 15,
+    salariosDevengados, diasPendientes,
+    totalFiniquito, montoMaxPrestamo,
+    fechaBaja: fechaBaja.toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'}),
+  };
+}
+
+/**
+ * Genera el HTML de la pestaña Liquidación/Finiquito para el panel de detalle.
+ * Incluye selector de fecha de salida y tabs Liquidación / Finiquito.
  */
 function calcLiquidacionHTML(sol) {
-  const salario  = parseFloat(sol.salario_mensual_bruto || sol.salario_mensual_neto || 0);
+  const salario    = parseFloat(sol.salario_mensual_bruto || sol.salario_mensual_neto || 0);
   const antiguedad = parseFloat(sol.antiguedad_anos || 0);
+  // Fecha de salida: usar fecha_baja_estim si existe, sino hoy
+  const fechaDefecto = sol.fecha_baja_estim
+    ? sol.fecha_baja_estim.slice(0,10)
+    : new Date().toISOString().slice(0,10);
 
-  if (!salario || !antiguedad) {
+  if (!salario) {
     return `<div class="empty-state" style="padding:40px 0">
       <div style="font-size:32px;margin-bottom:12px">⚖️</div>
-      <div style="color:var(--text-3)">Faltan datos para calcular la liquidación.<br>
-        <span style="font-size:12px">Se necesita salario bruto y fecha de ingreso.</span>
+      <div style="color:var(--text-3)">Faltan datos para calcular.<br>
+        <span style="font-size:12px">Se necesita salario bruto o neto.</span>
       </div>
     </div>`;
   }
 
-  const liq   = calcularLiquidacionLFT(salario, antiguedad, sol.fecha_ingreso_emp);
+  const liq = calcularLiquidacionLFT(salario, antiguedad, sol.fecha_ingreso_emp);
+  const fin = calcularFiniquitoLFT(salario, antiguedad, fechaDefecto);
   const monto = parseFloat(sol.monto_solicitado || 0);
-  const pct   = liq.montoMaxPrestamo > 0 ? (monto / liq.montoMaxPrestamo * 100) : 0;
-  const ok    = monto <= liq.montoMaxPrestamo;
-  const color = ok ? 'var(--green)' : 'var(--red)';
-  const icon  = ok ? '✅' : '⚠️';
+
+  function pctBarra(total) {
+    const p = total > 0 ? Math.min((monto / (total * PCT_MAX_PRESTAMO)) * 100, 100) : 0;
+    const ok = monto <= total * PCT_MAX_PRESTAMO;
+    const col = ok ? 'var(--green)' : 'var(--red)';
+    return { p, ok, col };
+  }
+
+  function filaDesglose(label, valor) {
+    return `<div style="display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--text-2)">${label}</span>
+      <span style="font-size:13px;font-weight:600">${fmtMXN(valor)}</span>
+    </div>`;
+  }
+  function filaSub(label, valor) {
+    return `<div style="display:flex;justify-content:space-between;padding:9px 14px;background:rgba(27,168,150,.06);border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;font-weight:700;color:var(--text-1)">${label}</span>
+      <span style="font-size:14px;font-weight:700;color:var(--teal)">${fmtMXN(valor)}</span>
+    </div>`;
+  }
+  function seccion(titulo) {
+    return `<div style="padding:8px 14px;background:var(--bg-surface);font-size:11px;font-weight:700;
+                color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">
+      ${titulo}</div>`;
+  }
+  function resumenBox(total, tipo) {
+    const { p, ok, col } = pctBarra(total);
+    return `
+      <div style="background:var(--dark);border-radius:12px;padding:16px 18px;margin:14px 0;
+                  display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">
+            Total ${tipo} estimado
+          </div>
+          <div style="font-size:11px;color:var(--text-3)">LFT México · ${tipo === 'liquidación' ? 'Despido injustificado' : 'Renuncia / Mutuo acuerdo'}</div>
+        </div>
+        <div style="font-size:26px;font-weight:800;color:var(--teal)">${fmtMXN(total)}</div>
+      </div>
+      <div style="background:${ok?'rgba(63,185,80,.08)':'rgba(248,81,73,.08)'};border:1px solid ${col};
+                  border-radius:12px;padding:16px 18px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">
+              ${ok?'✅':'⚠️'} Monto máximo de préstamo (80%)
+            </div>
+            <div style="font-size:11px;color:var(--text-3)">${fmtMXN(total)} × 80% = <b style="color:${col}">${fmtMXN(total*PCT_MAX_PRESTAMO)}</b></div>
+          </div>
+          <div style="font-size:24px;font-weight:800;color:${col}">${fmtMXN(total*PCT_MAX_PRESTAMO)}</div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-2);margin-bottom:4px;">
+            <span>Crédito solicitado: <b>${fmtMXN(monto)}</b></span>
+            <span style="color:${col};font-weight:700">${p.toFixed(1)}% del límite</span>
+          </div>
+          <div style="background:var(--bg-active);border-radius:4px;height:7px;overflow:hidden;">
+            <div style="height:100%;width:${p.toFixed(1)}%;background:${col};border-radius:4px;"></div>
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:600;color:${col}">
+          ${ok ? '✅ El monto solicitado está dentro del límite.' : `⚠️ Excede el límite. Reducir a máximo ${fmtMXN(total*PCT_MAX_PRESTAMO)}.`}
+        </div>
+      </div>`;
+  }
 
   return `
-    <!-- Encabezado -->
-    <div style="margin-bottom:16px;">
-      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;
-                  letter-spacing:.5px;margin-bottom:4px">Liquidación según Ley Federal del Trabajo</div>
-      <div style="font-size:12px;color:var(--text-2)">
-        Salario bruto: <b>${fmtMXN(salario)}/mes</b> ·
-        Antigüedad: <b>${liq.anos.toFixed(1)} años</b> ·
-        Salario diario: <b>${fmtMXN(liq.salarioDiario)}</b>
+    <!-- Selector de fecha de salida -->
+    <div style="background:var(--teal-dim);border-radius:10px;padding:14px 16px;
+                border:1px solid rgba(27,168,150,.3);margin-bottom:16px;
+                display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="font-size:12px;font-weight:600;color:var(--teal);">📅 Fecha de salida del empleado</div>
+      <input type="date" id="liqFechaSalida" value="${fechaDefecto}"
+        onchange="recalcularLiquidacion('${currentSolId}')"
+        style="padding:7px 12px;background:var(--bg-raised);border:1.5px solid var(--border);
+               border-radius:8px;color:var(--text-1);font-size:13px;">
+      <div style="font-size:11px;color:var(--text-2);">
+        Antigüedad: <b>${antiguedad.toFixed(1)} años</b> ·
+        Salario diario: <b>${fmtMXN(liq.salarioDiario)}</b> ·
+        Salario bruto: <b>${fmtMXN(salario)}/mes</b>
       </div>
     </div>
 
-    <!-- Desglose -->
-    <div style="background:var(--bg-raised);border-radius:10px;overflow:hidden;
-                border:1px solid var(--border);margin-bottom:16px;">
+    <!-- Tabs Liquidación / Finiquito -->
+    <div style="display:flex;gap:4px;background:var(--bg-raised);border-radius:10px;
+                padding:4px;margin-bottom:16px;">
+      <button onclick="showCalcTab('liquidacion', this)"
+        style="flex:1;padding:9px;border-radius:7px;border:none;background:var(--teal);
+               color:white;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;"
+        id="tabBtnLiq">⚖️ Liquidación (despido)</button>
+      <button onclick="showCalcTab('finiquito', this)"
+        style="flex:1;padding:9px;border-radius:7px;border:none;background:transparent;
+               color:var(--text-2);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;"
+        id="tabBtnFin">📄 Finiquito (renuncia)</button>
+    </div>
 
-      <!-- Indemnización constitucional -->
-      <div style="padding:10px 14px;background:var(--bg-surface);
-                  font-size:11px;font-weight:700;color:var(--text-3);
-                  text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">
-        Indemnización constitucional (Art. 123 + Art. 50 LFT)
+    <!-- TAB: Liquidación -->
+    <div id="calcTabLiquidacion">
+      <div style="background:var(--bg-raised);border-radius:10px;overflow:hidden;border:1px solid var(--border);margin-bottom:4px;">
+        ${seccion('Indemnización constitucional (Art. 123 + Art. 50 LFT)')}
+        ${filaDesglose('3 meses de salario (90 días)', liq.tresMeses)}
+        ${filaDesglose(`20 días × ${liq.anos.toFixed(1)} años (tope ${fmtMXN(liq.salarioDiarioTope)}/día)`, liq.veinteDiasPorAnio)}
+        ${filaSub('Subtotal indemnización', liq.subtotalIndem)}
+        ${seccion('Prima de Antigüedad (Art. 162 LFT)')}
+        ${filaDesglose(`12 días × ${liq.anos.toFixed(1)} años (tope 2 SMD)`, liq.primaAntiguedad)}
+        ${seccion('Partes Proporcionales')}
+        ${filaDesglose('Aguinaldo proporcional (15 días mínimo)', liq.aguinaldoProp)}
+        ${filaDesglose(`Vacaciones proporcionales (${liq.diasVac} días/año)`, liq.vacacionesProp)}
+        ${filaDesglose('Prima vacacional proporcional (25%)', liq.primaVacacProp)}
+        ${filaSub('Subtotal proporcionales', liq.subtotalPropor)}
       </div>
-      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text-2)">3 meses de salario (90 días)</span>
-        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.tresMeses)}</span>
-      </div>
-      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text-2)">20 días × ${liq.anos.toFixed(1)} años <span style="font-size:11px;color:var(--text-3)">(tope ${fmtMXN(liq.salarioDiarioTope)}/día)</span></span>
-        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.veinteDiasPorAnio)}</span>
-      </div>
-      <div style="padding:10px 14px;display:flex;justify-content:space-between;
-                  background:rgba(27,168,150,.06);border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;font-weight:700;color:var(--text-1)">Subtotal indemnización</span>
-        <span style="font-size:14px;font-weight:700;color:var(--teal)">${fmtMXN(liq.subtotalIndem)}</span>
-      </div>
-
-      <!-- Prima de antigüedad -->
-      <div style="padding:10px 14px;background:var(--bg-surface);
-                  font-size:11px;font-weight:700;color:var(--text-3);
-                  text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">
-        Prima de Antigüedad (Art. 162 LFT)
-      </div>
-      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text-2)">12 días × ${liq.anos.toFixed(1)} años <span style="font-size:11px;color:var(--text-3)">(tope 2 SMD)</span></span>
-        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.primaAntiguedad)}</span>
-      </div>
-
-      <!-- Partes proporcionales -->
-      <div style="padding:10px 14px;background:var(--bg-surface);
-                  font-size:11px;font-weight:700;color:var(--text-3);
-                  text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">
-        Partes Proporcionales
-      </div>
-      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text-2)">Aguinaldo proporcional (15 días mínimo)</span>
-        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.aguinaldoProp)}</span>
-      </div>
-      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text-2)">Vacaciones proporcionales (${liq.diasVac} días/año)</span>
-        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.vacacionesProp)}</span>
-      </div>
-      <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text-2)">Prima vacacional proporcional (25%)</span>
-        <span style="font-size:13px;font-weight:600">${fmtMXN(liq.primaVacacProp)}</span>
-      </div>
-      <div style="padding:10px 14px;display:flex;justify-content:space-between;
-                  background:rgba(27,168,150,.06)">
-        <span style="font-size:13px;font-weight:700;color:var(--text-1)">Subtotal proporcionales</span>
-        <span style="font-size:14px;font-weight:700;color:var(--teal)">${fmtMXN(liq.subtotalPropor)}</span>
+      ${resumenBox(liq.totalLiquidacion, 'liquidación')}
+      <div style="background:var(--bg-raised);border-radius:8px;padding:10px 14px;border-left:3px solid var(--amber);">
+        <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:3px">⚠️ Nota legal</div>
+        <div style="font-size:11px;color:var(--text-2);line-height:1.6">
+          Cálculo basado en LFT (Art. 50, 76, 80, 87, 123, 162). El salario integrado puede variar si incluye comisiones, bonos o despensa. Tope de indemnización: ${TOPE_LIQUIDACION} × SMD ($${SALARIO_MINIMO_DIARIO}/día).
+        </div>
       </div>
     </div>
 
-    <!-- Total liquidación -->
-    <div style="background:var(--dark);border-radius:12px;padding:18px 20px;
-                margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
-      <div>
-        <div style="font-size:11px;font-weight:700;color:var(--teal);
-                    text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">
-          Total liquidación estimada
-        </div>
-        <div style="font-size:11px;color:var(--text-3)">Despido injustificado · LFT México</div>
-      </div>
-      <div style="font-size:28px;font-weight:800;color:var(--teal)">${fmtMXN(liq.totalLiquidacion)}</div>
-    </div>
-
-    <!-- Monto máximo préstamo -->
-    <div style="background:${ok?'rgba(63,185,80,.08)':'rgba(248,81,73,.08)'};
-                border:1px solid ${color};border-radius:12px;padding:18px 20px;margin-bottom:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
-        <div>
-          <div style="font-size:11px;font-weight:700;color:${color};
-                      text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">
-            ${icon} Monto máximo de préstamo (80% de liquidación)
-          </div>
-          <div style="font-size:11px;color:var(--text-3)">
-            ${fmtMXN(liq.totalLiquidacion)} × 80% = <b style="color:${color}">${fmtMXN(liq.montoMaxPrestamo)}</b>
-          </div>
-        </div>
-        <div style="font-size:28px;font-weight:800;color:${color}">${fmtMXN(liq.montoMaxPrestamo)}</div>
-      </div>
-
-      <!-- Barra de uso del límite -->
-      <div style="margin-bottom:8px;">
-        <div style="display:flex;justify-content:space-between;font-size:11px;
-                    color:var(--text-2);margin-bottom:5px;">
-          <span>Crédito solicitado: <b>${fmtMXN(monto)}</b></span>
-          <span style="color:${color};font-weight:700">${pct.toFixed(1)}% del límite</span>
-        </div>
-        <div style="background:var(--bg-active);border-radius:4px;height:8px;overflow:hidden;">
-          <div style="height:100%;width:${Math.min(pct,100).toFixed(1)}%;
-                      background:${color};border-radius:4px;transition:width .6s ease;"></div>
-        </div>
-      </div>
-
-      <div style="font-size:12px;font-weight:600;color:${color};">
-        ${ok
-          ? `✅ El monto solicitado está dentro del límite de seguridad.`
-          : `⚠️ El monto solicitado excede el 80% de la liquidación estimada. Se recomienda reducir el crédito a ${fmtMXN(liq.montoMaxPrestamo)} o menos.`
+    <!-- TAB: Finiquito -->
+    <div id="calcTabFiniquito" style="display:none;">
+      <div style="background:var(--bg-raised);border-radius:10px;overflow:hidden;border:1px solid var(--border);margin-bottom:4px;">
+        ${seccion('Partes proporcionales al día de salida')}
+        ${filaDesglose(`Aguinaldo proporcional (${fin.diasEnAnio} días trabajados en el año)`, fin.aguinaldoProp)}
+        ${filaDesglose(`Vacaciones proporcionales (${fin.diasVac} días/año × fracción)`, fin.vacacionesProp)}
+        ${filaDesglose('Prima vacacional (25%)', fin.primaVacacProp)}
+        ${fin.primaAntigApplica
+          ? filaDesglose(`Prima de antigüedad (${fin.anos.toFixed(1)} años ≥ 15)`, fin.primaAntiguedad)
+          : `<div style="padding:9px 14px;border-bottom:1px solid var(--border)">
+               <span style="font-size:12px;color:var(--text-3)">Prima de antigüedad: No aplica en renuncia (< 15 años de servicio)</span>
+             </div>`
         }
+        ${filaSub('Total finiquito', fin.totalFiniquito)}
       </div>
-    </div>
-
-    <!-- Nota legal -->
-    <div style="background:var(--bg-raised);border-radius:8px;padding:12px 14px;
-                border-left:3px solid var(--amber);">
-      <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:4px">⚠️ Nota legal</div>
-      <div style="font-size:11px;color:var(--text-2);line-height:1.6">
-        Este cálculo es una estimación con base en la Ley Federal del Trabajo (Art. 50, 76, 80, 87, 123 y 162).
-        El salario diario integrado puede variar si el empleado tiene partes variables (comisiones, bonos, despensa, etc.).
-        El tope de liquidación por indemnización es de ${TOPE_LIQUIDACION} veces el SMG diario ($${SALARIO_MINIMO_DIARIO}/día).
-        Consultar con el área legal ante cualquier caso particular.
+      ${resumenBox(fin.totalFiniquito, 'finiquito')}
+      <div style="background:var(--bg-raised);border-radius:8px;padding:10px 14px;border-left:3px solid var(--blue);">
+        <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:3px">ℹ️ Diferencia con liquidación</div>
+        <div style="font-size:11px;color:var(--text-2);line-height:1.6">
+          El finiquito aplica en renuncia voluntaria o mutuo acuerdo. No incluye la indemnización de 3 meses + 20 días/año. La prima de antigüedad solo aplica si el empleado tiene 15 o más años de servicio (Art. 162 LFT).
+        </div>
       </div>
     </div>
   `;
 }
+
+function showCalcTab(tab, btn) {
+  $('calcTabLiquidacion').style.display = tab === 'liquidacion' ? 'block' : 'none';
+  $('calcTabFiniquito').style.display   = tab === 'finiquito'   ? 'block' : 'none';
+  // Estilos de los botones
+  $('tabBtnLiq').style.background = tab === 'liquidacion' ? 'var(--teal)' : 'transparent';
+  $('tabBtnLiq').style.color      = tab === 'liquidacion' ? 'white' : 'var(--text-2)';
+  $('tabBtnFin').style.background = tab === 'finiquito'   ? 'var(--teal)' : 'transparent';
+  $('tabBtnFin').style.color      = tab === 'finiquito'   ? 'white' : 'var(--text-2)';
+}
+
+function recalcularLiquidacion(solId) {
+  const nuevaFecha = $('liqFechaSalida')?.value;
+  if (!nuevaFecha || !currentSolData) return;
+  // Recalcular con la nueva fecha de salida
+  const sol = { ...currentSolData, fecha_baja_estim: nuevaFecha };
+  // Calcular nueva antigüedad si tenemos fecha de ingreso
+  if (sol.fecha_ingreso_emp) {
+    const ingreso = new Date(sol.fecha_ingreso_emp);
+    const salida  = new Date(nuevaFecha);
+    sol.antiguedad_anos = ((salida - ingreso) / (1000*60*60*24*365.25)).toFixed(2);
+  }
+  const tab = $('calcTabFiniquito')?.style.display === 'none' ? 'liquidacion' : 'finiquito';
+  const contenedor = $('dtab-liquidacion');
+  if (contenedor) {
+    contenedor.innerHTML = calcLiquidacionHTML(sol);
+    if (tab === 'finiquito') showCalcTab('finiquito', null);
+  }
+}
+
 let simPlazo   = 12;
 let simTipoNom = 'MENSUAL';
 
