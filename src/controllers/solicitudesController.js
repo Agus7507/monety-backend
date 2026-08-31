@@ -223,10 +223,10 @@ async function consultarEstado(req, res, next) {
          p.nombres, p.apellido_pat, p.apellido_mat,
          p.email, p.telefono, p.curp,
          p.entidad, p.alcaldia_mpio,
-         TRIM(p.nombres + ' ' + p.apellido_pat + ' ' + ISNULL(p.apellido_mat,'')) AS nombre,
+         TRIM(CONCAT(p.nombres, ' ', p.apellido_pat, ' ', COALESCE(p.apellido_mat,''))) AS nombre,
          -- Empresa (LEFT JOIN por si empresa_id no existe aún)
          e.id AS empresa_id_val,
-         ISNULL(e.nombre, 'Sin empresa') AS empresa_nombre,
+         COALESCE(e.nombre, 'Sin empresa') AS empresa_nombre,
          -- Evaluación
          ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
          ev.puntos_ingreso, ev.puntos_historial,
@@ -279,9 +279,9 @@ async function listar(req, res, next) {
          s.id, s.folio, s.estado, s.fecha_solicitud, s.tipo_credito,
          s.monto_solicitado, s.plazo_meses,
          s.salario_mensual_neto, s.historial_crediticio, s.antiguedad_anos,
-         p.nombres + ' ' + p.apellido_pat AS nombre,
+         CONCAT(p.nombres, ' ', p.apellido_pat) AS nombre,
          p.email, p.telefono,
-         ISNULL(e.nombre, 'Sin empresa') AS empresa,
+         COALESCE(e.nombre, 'Sin empresa') AS empresa,
          ev.ranking, ev.puntaje_total, ev.resultado
        FROM solicitudes s
        JOIN solicitantes p         ON p.id = s.solicitante_id
@@ -335,9 +335,9 @@ async function obtener(req, res, next) {
          p.nombres, p.apellido_pat, p.apellido_mat,
          p.email, p.telefono, p.curp, p.rfc,
          p.calle, p.colonia, p.alcaldia_mpio, p.entidad, p.cp,
-         TRIM(p.nombres + ' ' + p.apellido_pat + ' ' + ISNULL(p.apellido_mat,'')) AS nombre,
+         TRIM(CONCAT(p.nombres, ' ', p.apellido_pat, ' ', COALESCE(p.apellido_mat,''))) AS nombre,
          -- Empresa
-         ISNULL(e.nombre,'Sin empresa') AS empresa_nombre,
+         COALESCE(e.nombre,'Sin empresa') AS empresa_nombre,
          -- Evaluación
          ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
          ev.puntos_ingreso, ev.puntos_historial,
@@ -593,7 +593,7 @@ async function cambiarEstado(req, res, next) {
       const emailSvc = require('../services/emailService');
       // Obtener email y nombre del solicitante
       const { rows: solInfo } = await db(
-        `SELECT p.email, TRIM(p.nombres + ' ' + p.apellido_pat) AS nombre,
+        `SELECT p.email, TRIM(CONCAT(p.nombres, ' ', p.apellido_pat)) AS nombre,
                 c.monto_aprobado, c.plazo_meses, c.pago_mensual_total,
                 c.tasa_nominal_anual, c.cat_anual,
                 c.fecha_desembolso, c.fecha_inicio_descuento,

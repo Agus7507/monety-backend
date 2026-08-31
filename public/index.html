@@ -1857,8 +1857,9 @@
       navigator.clipboard.writeText(folio).catch(() => {});
     }
     // URL de apertura de cuenta — cambiar cuando esté lista la página
-    window.open('https://monety.mx/abre-tu-cuenta', '_blank');
+    window.open('http://3.133.23.146/portal.html', '_blank');
   }
+  function resetForm() {
     currentStep = 1;
     document.getElementById('page1').classList.add('active');
     updateStepUI();
