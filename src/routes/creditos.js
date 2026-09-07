@@ -23,7 +23,7 @@ router.post('/',
   async (req, res, next) => {
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      
 
       const {
         solicitudId, montoAprobado, plazoMeses,
@@ -77,7 +77,7 @@ router.post('/',
             saldo_insoluto, fecha_desembolso, fecha_vencimiento)
          VALUES
            ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-         RETURNING id`,
+         OUTPUT INSERTED.id`,
         [solicitudId, eval_id,
          montoAprobado, plazoMeses,
          tasaNominalMensual, tasaAnual, cat, iva,
@@ -117,11 +117,11 @@ router.post('/',
 
       // Marcar solicitud como APROBADA
       await client.query(
-        `UPDATE solicitudes SET estado='APROBADA', updated_at=NOW() WHERE id=$1`,
+        `UPDATE solicitudes SET estado='APROBADA', updated_at=SYSDATETIMEOFFSET() WHERE id=$1`,
         [solicitudId]
       );
 
-      await client.query('COMMIT');
+      await client.commit();
       logger.info('Crédito formalizado', { creditoId, solicitudId });
 
       res.status(201).json({
@@ -136,7 +136,7 @@ router.post('/',
         tablaAmortizacion: tabla,
       });
     } catch (err) {
-      await client.query('ROLLBACK');
+      await client.rollback();
       next(err);
     } finally {
       client.release();
@@ -160,7 +160,7 @@ router.get('/',
                 c.tasa_nominal_anual, c.cat_anual, c.pago_mensual_total,
                 c.saldo_insoluto, c.fecha_desembolso, c.fecha_vencimiento,
                 c.estado, c.dias_vencido,
-                CONCAT(p.nombres,' ',p.apellido_pat) AS acreditado,
+                p.nombres + ' ' + p.apellido_pat AS acreditado,
                 e.nombre AS empresa
          FROM creditos c
          JOIN solicitudes  s  ON s.id = c.solicitud_id
@@ -215,15 +215,15 @@ router.patch('/:id/pago/:periodo',
   async (req, res, next) => {
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      
       const { id, periodo } = req.params;
       const { montoPagado, fechaPagoReal } = req.body;
 
       const { rows } = await client.query(
         `UPDATE amortizacion
-         SET pagado=TRUE, monto_pagado=$1, fecha_pago_real=$2
-         WHERE credito_id=$3 AND periodo=$4 AND pagado=FALSE
-         RETURNING capital, saldo_insoluto`,
+         SET pagado=1, monto_pagado=$1, fecha_pago_real=$2
+         WHERE credito_id=$3 AND periodo=$4 AND pagado=0
+         OUTPUT INSERTED.capital, INSERTED.saldo_insoluto`,
         [montoPagado, fechaPagoReal, id, periodo]
       );
 
@@ -236,14 +236,53 @@ router.patch('/:id/pago/:periodo',
       // Actualizar saldo insoluto del crédito
       await client.query(
         `UPDATE creditos SET saldo_insoluto = saldo_insoluto - $1,
-         updated_at=NOW() WHERE id=$2`,
+         pagos_realizados = pagos_realizados + 1,
+         updated_at = SYSDATETIMEOFFSET() WHERE id=$2`,
         [rows[0].capital, id]
       );
 
-      await client.query('COMMIT');
-      res.json({ ok: true, message: `Pago del periodo ${periodo} registrado` });
+      // Verificar si todos los periodos están pagados → marcar como PAGADO
+      const { rows: pendientes } = await client.query(
+        `SELECT COUNT(*) AS total
+         FROM amortizacion
+         WHERE credito_id = $1 AND pagado = 0`,
+        [id]
+      );
+
+      const sinPagar = parseInt(pendientes[0].total || pendientes[0].count || 0);
+      let creditoPagado = false;
+
+      if (sinPagar === 0) {
+        // Todos los periodos pagados — cambiar estado a PAGADO
+        await client.query(
+          `UPDATE creditos
+           SET estado = 'PAGADO', saldo_insoluto = 0,
+               updated_at = SYSDATETIMEOFFSET()
+           WHERE id = $1`,
+          [id]
+        );
+        // También actualizar la solicitud para reflejar en el portal
+        await client.query(
+          `UPDATE solicitudes
+           SET updated_at = SYSDATETIMEOFFSET()
+           WHERE id = (SELECT solicitud_id FROM creditos WHERE id = $1)`,
+          [id]
+        );
+        creditoPagado = true;
+        logger.info('Crédito liquidado completamente', { creditoId: id });
+      }
+
+      await client.commit();
+      res.json({
+        ok:            true,
+        message:       `Pago del periodo ${periodo} registrado`,
+        creditoPagado,
+        mensaje:       creditoPagado
+          ? '🎉 ¡Crédito liquidado completamente! Ya está disponible la Carta de Término.'
+          : undefined,
+      });
     } catch (err) {
-      await client.query('ROLLBACK');
+      await client.rollback();
       next(err);
     } finally {
       client.release();

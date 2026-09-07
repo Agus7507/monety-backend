@@ -63,10 +63,10 @@ router.get('/',
            c.id AS credito_id, c.monto_aprobado, c.plazo_meses,
            s.folio,
            -- Acreditado
-           TRIM(CONCAT(p.nombres,' ',p.apellido_pat,' ',COALESCE(p.apellido_mat,''))) AS acreditado,
+           TRIM(p.nombres + ' ' + p.apellido_pat + ' ' + ISNULL(p.apellido_mat, '')) AS acreditado,
            p.curp, p.email, p.telefono,
            -- Empresa
-           COALESCE(e.nombre,'Sin empresa') AS empresa,
+           ISNULL(e.nombre, 'Sin empresa') AS empresa,
            e.id AS empresa_id,
            -- Totales
            c.plazo_meses * (CASE l.tipo_frecuencia WHEN 'QUINCENAL' THEN 2 WHEN 'SEMANAL' THEN 4 ELSE 1 END) AS total_descuentos
@@ -123,8 +123,9 @@ router.post('/generar',
     try {
       const { periodo, tipo, empresa_id } = req.body;
 
+      // SQL Server usa stored procedure en lugar de función PostgreSQL
       const { rows } = await db(
-        `SELECT * FROM generar_layout_periodo($1, $2::layout_tipo_enum, $3)`,
+        `EXEC sp_generar_layout_periodo @p1, @p2, @p3`,
         [periodo, tipo, empresa_id || null]
       );
 
@@ -157,20 +158,20 @@ router.patch('/:id/estado',
       const { estado, referencia_bancaria, notas } = req.body;
 
       const camposExtra = estado === 'ENVIADO'
-        ? ', fecha_envio = NOW(), enviado_por = $4'
+        ? ', fecha_envio = SYSDATETIMEOFFSET(), enviado_por = $4'
         : estado === 'CONFIRMADO'
-        ? ', fecha_confirmacion = NOW(), confirmado_por = $4'
-        : ', fecha_rechazo = NOW()';
+        ? ', fecha_confirmacion = SYSDATETIMEOFFSET(), confirmado_por = $4'
+        : ', fecha_rechazo = SYSDATETIMEOFFSET()';
 
       const { rows } = await db(
         `UPDATE layouts_nomina
          SET estado = $1::layout_estado_enum,
              referencia_bancaria = COALESCE($2, referencia_bancaria),
              notas = COALESCE($3, notas),
-             updated_at = NOW()
+             updated_at = SYSDATETIMEOFFSET()
              ${camposExtra}
          WHERE id = $${estado === 'RECHAZADO' ? '4' : '4'}
-         RETURNING id, estado, folio`,
+         OUTPUT INSERTED.id, estado, folio`,
         estado === 'RECHAZADO'
           ? [estado, referencia_bancaria, notas, id]
           : [estado, referencia_bancaria, notas, req.user.id, id]
@@ -200,35 +201,69 @@ router.patch('/confirmar-lote',
   async (req, res, next) => {
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      // transaction started;
       const { ids, referencia_bancaria } = req.body;
 
-      const { rows } = await client.query(
-        `UPDATE layouts_nomina
-         SET estado               = 'CONFIRMADO',
-             fecha_confirmacion   = NOW(),
-             confirmado_por       = $1,
-             referencia_bancaria  = COALESCE($2, referencia_bancaria),
-             updated_at           = NOW()
-         WHERE id = ANY($3::uuid[])
-           AND estado != 'CONFIRMADO'
-         RETURNING id, estado`,
-        [req.user.id, referencia_bancaria || null, ids]
-      );
+      // SQL Server no tiene ANY() con arrays — actualizar uno por uno en lote
+      let confirmados = 0;
+      for (const id of ids) {
+        const { rowCount } = await client.query(
+          `UPDATE layouts_nomina
+           SET estado              = 'CONFIRMADO',
+               fecha_confirmacion  = SYSDATETIMEOFFSET(),
+               confirmado_por      = $1,
+               referencia_bancaria = COALESCE($2, referencia_bancaria),
+               updated_at          = SYSDATETIMEOFFSET()
+           WHERE id = $3 AND estado != 'CONFIRMADO'`,
+          [req.user.id, referencia_bancaria || null, id]
+        );
+        confirmados += rowCount;
+      }
 
-      await client.query('COMMIT');
+      await client.commit();
+      logger.info('Lote de layouts confirmado', { cantidad: confirmados, usuario: req.user.email });
 
-      logger.info('Lote de layouts confirmado', { cantidad: rows.length, usuario: req.user.email });
+      // Verificar si algún crédito quedó completamente pagado
+      const creditosPagados = [];
+      for (const id of ids) {
+        // Obtener el credito_id del layout confirmado
+        const { rows: layoutRows } = await db(
+          `SELECT credito_id FROM layouts_nomina WHERE id = $1`, [id]
+        );
+        if (!layoutRows.length) continue;
+        const creditoId = layoutRows[0].credito_id;
+
+        // Verificar periodos pendientes en amortización
+        const { rows: pendientes } = await db(
+          `SELECT COUNT(*) AS total FROM amortizacion
+           WHERE credito_id = $1 AND pagado = 0`, [creditoId]
+        );
+        const sinPagar = parseInt(pendientes[0].total || pendientes[0].count || 0);
+        if (sinPagar === 0) {
+          // Marcar como PAGADO
+          await db(
+            `UPDATE creditos SET estado='PAGADO', saldo_insoluto=0,
+             updated_at=SYSDATETIMEOFFSET() WHERE id=$1 AND estado='ACTIVO'`,
+            [creditoId]
+          );
+          creditosPagados.push(creditoId);
+          logger.info('Crédito marcado como PAGADO tras confirmar lote', { creditoId });
+        }
+      }
+
       res.json({
         ok:           true,
-        confirmados:  rows.length,
-        mensaje:      `${rows.length} pago(s) confirmados exitosamente`,
+        confirmados,
+        creditosPagados: creditosPagados.length,
+        mensaje:      confirmados > 0
+          ? `${confirmados} pago(s) confirmados${creditosPagados.length ? ` · ${creditosPagados.length} crédito(s) liquidado(s) completamente 🎉` : ''}`
+          : 'Sin cambios',
       });
     } catch (err) {
-      await client.query('ROLLBACK');
+      await client.rollback();
       next(err);
     } finally {
-      client.release();
+      await client.release();
     }
   }
 );
@@ -266,7 +301,7 @@ router.get('/resumen/:periodo',
       // Detalle por empresa
       const { rows: porEmpresa } = await db(
         `SELECT
-           COALESCE(e.nombre,'Sin empresa') AS empresa,
+           ISNULL(e.nombre, 'Sin empresa') AS empresa,
            COUNT(*)                          AS creditos,
            COALESCE(SUM(l.importe),0)        AS importe,
            COUNT(*) FILTER (WHERE l.estado='CONFIRMADO') AS pagados

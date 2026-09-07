@@ -167,9 +167,9 @@ async function getDatosSolicitud(id) {
        -- Solicitante
        p.nombres, p.apellido_pat, p.apellido_mat, p.curp,
        p.email, p.telefono,
-       TRIM(CONCAT(p.nombres,' ',p.apellido_pat,' ',COALESCE(p.apellido_mat,''))) AS nombre_completo,
+       TRIM(p.nombres + ' ' + p.apellido_pat + ' ' + ISNULL(p.apellido_mat, '')) AS nombre_completo,
        -- Empresa
-       COALESCE(e.nombre,'Sin empresa') AS empresa_nombre,
+       ISNULL(e.nombre, 'Sin empresa') AS empresa_nombre,
        -- Evaluación
        ev.ranking, ev.puntaje_total, ev.resultado,
        ev.puntos_ingreso, ev.puntos_historial,
@@ -486,6 +486,274 @@ router.get('/:id/contrato',
     window.onload = () => setTimeout(() => window.print(), 600);
   }
 </script>
+</body>
+</html>`;
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(html);
+    } catch (err) { next(err); }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/v1/documentos/:id/termino
+// Carta de Término de Préstamo — solo disponible cuando el
+// crédito está en estado PAGADO (todos los periodos pagados)
+// ═══════════════════════════════════════════════════════════════
+router.get('/:id/termino',
+  authMiddleware,
+  param('id').isUUID(),
+  handleValidationErrors,
+  async (req, res, next) => {
+    try {
+      const sol = await getDatosSolicitud(req.params.id);
+      if (!sol) return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
+
+      // Solo se genera si el crédito está PAGADO
+      if (sol.estado_credito !== 'PAGADO') {
+        return res.status(403).json({
+          ok:      false,
+          message: 'La carta de término solo está disponible cuando el crédito ha sido liquidado en su totalidad.',
+          estado:  sol.estado_credito || sol.estado,
+        });
+      }
+
+      // Fecha de liquidación: último pago confirmado
+      const { rows: pagos } = await db(
+        `SELECT fecha_pago_real, periodo
+         FROM amortizacion
+         WHERE credito_id = $1 AND pagado = TRUE
+         ORDER BY periodo DESC LIMIT 1`,
+        [sol.credito_id]
+      );
+      const fechaLiquidacion = pagos.length
+        ? new Date(pagos[0].fecha_pago_real || sol.fecha_vencimiento)
+        : new Date();
+
+      const fmtFecha = (d) => {
+        const fecha = new Date(d);
+        const dias  = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+        const meses = ['enero','febrero','marzo','abril','mayo','junio',
+                       'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        return `${fecha.getDate()} del mes de ${meses[fecha.getMonth()]} del año ${fecha.getFullYear()}`;
+      };
+
+      const fmtFechaCiudad = (d) => {
+        const fecha = new Date(d);
+        const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+                       'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+        return `CIUDAD DE MÉXICO ${fecha.getDate()} DE ${meses[fecha.getMonth()]} DEL ${fecha.getFullYear()}.`;
+      };
+
+      const nombre = (sol.nombre_completo || '').toUpperCase();
+
+      const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carta de Término de Préstamo — ${sol.folio}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Montserrat', Arial, sans-serif;
+      font-size: 13pt;
+      color: #222;
+      background: white;
+      padding: 0;
+    }
+    .page {
+      width: 216mm;
+      min-height: 279mm;
+      margin: 0 auto;
+      padding: 18mm 20mm 24mm 20mm;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header con logo y decoración */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10mm;
+    }
+    .logo-box { display: flex; flex-direction: column; }
+    .logo-m {
+      font-size: 32pt; font-weight: 900; color: #1BA896;
+      line-height: 1; letter-spacing: -1px;
+    }
+    .logo-m span { color: #222; }
+    .logo-sub { font-size: 7.5pt; color: #888; margin-top: 2px; }
+    .deco {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+    }
+    .deco-circle-teal {
+      width: 18px; height: 18px; background: #1BA896; border-radius: 50%;
+    }
+    .deco-circle-gray {
+      width: 22px; height: 22px; background: #b0b0b0; border-radius: 50%;
+    }
+    .deco-pill {
+      width: 60px; height: 18px; background: #888; border-radius: 20px;
+      transform: rotate(-35deg); margin-right: -8px;
+    }
+    .deco-pill-teal {
+      width: 45px; height: 14px; background: #1BA896; border-radius: 20px;
+      transform: rotate(-35deg); margin-right: 8px;
+    }
+
+    /* Título */
+    .titulo {
+      text-align: center;
+      color: #1BA896;
+      font-size: 14pt;
+      font-weight: 700;
+      letter-spacing: 1px;
+      margin-bottom: 10mm;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+
+    /* Fecha ciudad */
+    .fecha-ciudad {
+      text-align: right;
+      font-size: 11pt;
+      color: #222;
+      margin-bottom: 14mm;
+    }
+
+    /* Cuerpo */
+    .cuerpo {
+      flex: 1;
+      font-size: 12pt;
+      line-height: 2.2;
+      text-align: justify;
+      color: #222;
+      margin-bottom: 14mm;
+    }
+    .nombre-acreditado {
+      font-weight: 700;
+      color: #222;
+    }
+
+    /* Firma */
+    .firma-section {
+      margin-top: 10mm;
+      text-align: center;
+    }
+    .firma-texto { font-size: 11pt; color: #222; margin-bottom: 8mm; }
+    .firma-linea {
+      width: 220px; border-top: 1.5px solid #222;
+      margin: 0 auto 4mm auto;
+    }
+    .firma-nombre { font-size: 11pt; font-weight: 700; color: #222; }
+
+    /* Footer */
+    .footer {
+      margin-top: auto;
+      padding-top: 8mm;
+      border-top: 2px solid #1BA896;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 32px;
+    }
+    .footer-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 8pt; color: #888; font-weight: 600;
+    }
+    .footer-icon {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: #1BA896; display: flex; align-items: center;
+      justify-content: center; color: white; font-size: 9pt;
+    }
+
+    /* Botón imprimir */
+    .print-btn {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #1BA896; color: white; border: none;
+      border-radius: 50px; padding: 14px 28px;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      font-family: inherit; box-shadow: 0 4px 16px rgba(27,168,150,.4);
+      transition: background .2s; z-index: 999;
+    }
+    .print-btn:hover { background: #138e7e; }
+
+    @media print {
+      .print-btn { display: none; }
+      body { padding: 0; }
+      .page { margin: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">⬇ Imprimir / Guardar PDF</button>
+
+  <div class="page">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo-box">
+        <div class="logo-m"><span>M</span>onety</div>
+        <div class="logo-sub">Soluciones financieras que te respaldan</div>
+      </div>
+      <div class="deco">
+        <div style="display:flex;gap:6px;align-items:center;">
+          <div class="deco-pill"></div>
+          <div class="deco-circle-gray"></div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+          <div class="deco-pill-teal"></div>
+          <div class="deco-circle-teal"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Título -->
+    <div class="titulo">CARTA DE TERMINO DE PRESTAMO</div>
+
+    <!-- Fecha -->
+    <div class="fecha-ciudad">${fmtFechaCiudad(fechaLiquidacion)}</div>
+
+    <!-- Cuerpo -->
+    <div class="cuerpo">
+      Por medio de la presente se hace constar que el préstamo solicitado a nombre del C.
+
+      <span class="nombre-acreditado">${nombre}</span> fue concluido el día ${fmtFecha(fechaLiquidacion)}.
+
+      Asimismo, en su calidad de titular de este, se informa que dicho préstamo se
+
+      encuentra totalmente liquidado conforme a los pagos acordados.
+    </div>
+
+    <!-- Firma -->
+    <div class="firma-section">
+      <div class="firma-texto">En señal de conformidad se firma el documento.</div>
+      <div style="height:32px;"></div>
+      <div class="firma-linea"></div>
+      <div class="firma-nombre">${MUTUANTE.rep}</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-item">
+        <div class="footer-icon">📸</div>
+        <span>@monety.finanzas</span>
+      </div>
+      <div class="footer-item">
+        <div class="footer-icon">🌐</div>
+        <span>www.monety.mx</span>
+      </div>
+      <div class="footer-item">
+        <div class="footer-icon">in</div>
+        <span>Monety</span>
+      </div>
+    </div>
+
+  </div>
 </body>
 </html>`;
 

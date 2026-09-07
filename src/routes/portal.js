@@ -100,7 +100,7 @@ router.post('/registro',
       const hash = await bcrypt.hash(password, 12);
       await db(
         `UPDATE solicitantes
-         SET portal_password_hash = $1, portal_activo = TRUE, updated_at = NOW()
+         SET portal_password_hash = $1, portal_activo = 1, updated_at = SYSDATETIMEOFFSET()
          WHERE id = $2`,
         [hash, sol.id]
       );
@@ -208,7 +208,7 @@ router.get('/solicitudes', portalAuth, async (req, res, next) => {
          s.tipo_credito, s.tipo_nomina,
          s.monto_solicitado, s.plazo_meses,
          s.salario_mensual_neto,
-         COALESCE(e.nombre, 'Sin empresa') AS empresa,
+         ISNULL(e.nombre, 'Sin empresa') AS empresa,
          ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
          c.monto_aprobado, c.pago_mensual_total,
          c.tasa_nominal_anual, c.cat_anual,
@@ -238,7 +238,7 @@ router.get('/solicitudes/:folio', portalAuth,
         `SELECT
            s.id, s.folio, s.estado, s.fecha_solicitud,
            s.tipo_credito, s.tipo_nomina, s.monto_solicitado, s.plazo_meses,
-           COALESCE(e.nombre,'Sin empresa') AS empresa,
+           ISNULL(e.nombre, 'Sin empresa') AS empresa,
            ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
            ev.puntos_ingreso, ev.puntos_historial, ev.puntos_antiguedad, ev.puntos_capacidad_pago,
            c.id AS credito_id, c.monto_aprobado, c.pago_mensual_total,
@@ -324,10 +324,242 @@ router.post('/cambiar-password', portalAuth,
       if (!valid) return res.status(401).json({ ok: false, message: 'Contraseña actual incorrecta' });
 
       const newHash = await bcrypt.hash(passwordNuevo, 12);
-      await db('UPDATE solicitantes SET portal_password_hash=$1, updated_at=NOW() WHERE id=$2',
+      await db('UPDATE solicitantes SET portal_password_hash=$1, updated_at=SYSDATETIMEOFFSET() WHERE id=$2',
         [newHash, req.solicitante.id]);
 
       res.json({ ok: true, mensaje: 'Contraseña actualizada exitosamente' });
+    } catch (err) { next(err); }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════
+// POST /api/v1/portal/recuperar-password
+// Cambia la contraseña usando email + folio como verificación
+// (sin necesidad de estar autenticado)
+// ════════════════════════════════════════════════════════════════
+router.post('/recuperar-password',
+  body('email').isEmail().normalizeEmail(),
+  body('folio').matches(/^MNT-\d{6}$/).withMessage('Folio inválido'),
+  body('passwordNuevo').isLength({ min: 8 }),
+  handleValidationErrors,
+  async (req, res, next) => {
+    try {
+      const { email, folio, passwordNuevo } = req.body;
+
+      // Verificar que existe la combinación email + folio
+      const { rows } = await db(
+        `SELECT p.id, p.portal_activo
+         FROM solicitantes p
+         JOIN solicitudes s ON s.solicitante_id = p.id
+         WHERE p.email = $1 AND s.folio = $2`,
+        [email, folio.toUpperCase()]
+      );
+
+      if (!rows.length) {
+        return res.status(404).json({
+          ok:      false,
+          message: 'No se encontró una cuenta con ese email y folio. Verifica tus datos.',
+        });
+      }
+
+      const hash = await bcrypt.hash(passwordNuevo, 12);
+      await db(
+        `UPDATE solicitantes
+         SET portal_password_hash = $1,
+             portal_activo        = TRUE,
+             updated_at           = NOW()
+         WHERE id = $2`,
+        [hash, rows[0].id]
+      );
+
+      logger.info('Contraseña recuperada', { solicitanteId: rows[0].id });
+      res.json({ ok: true, mensaje: 'Contraseña actualizada exitosamente. Ya puedes iniciar sesión.' });
+    } catch (err) { next(err); }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════
+// GET /api/v1/portal/documentos/:solicitudId
+// Documentos del expediente del solicitante autenticado
+// ════════════════════════════════════════════════════════════════
+router.get('/documentos/:solicitudId', portalAuth,
+  param('solicitudId').isUUID(),
+  handleValidationErrors,
+  async (req, res, next) => {
+    try {
+      const { solicitudId } = req.params;
+
+      // Verificar que la solicitud pertenece al solicitante autenticado
+      const { rows: check } = await db(
+        `SELECT id FROM solicitudes
+         WHERE id = $1 AND solicitante_id = $2`,
+        [solicitudId, req.solicitante.id]
+      );
+      if (!check.length) {
+        return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
+      }
+
+      const { rows } = await db(
+        `SELECT
+           d.id, d.tipo, d.nombre_archivo,
+           d.tamanio_bytes, d.mime_type,
+           d.verificado, d.created_at
+         FROM documentos d
+         WHERE d.solicitud_id = $1
+         ORDER BY d.created_at DESC`,
+        [solicitudId]
+      );
+
+      res.json({ ok: true, documentos: rows });
+    } catch (err) { next(err); }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════
+// GET /api/v1/portal/carta-termino/:solicitudId
+// Carta de Término — solo disponible cuando el crédito está PAGADO
+// ════════════════════════════════════════════════════════════════
+router.get('/carta-termino/:solicitudId', portalAuth,
+  param('solicitudId').isUUID(),
+  handleValidationErrors,
+  async (req, res, next) => {
+    try {
+      const { solicitudId } = req.params;
+
+      // Verificar que pertenece al solicitante
+      const { rows } = await db(
+        `SELECT s.folio, s.id,
+                TRIM(p.nombres || ' ' || p.apellido_pat || ' ' || COALESCE(p.apellido_mat,'')) AS nombre_completo,
+                c.id AS credito_id, c.estado AS estado_credito,
+                c.monto_aprobado, c.plazo_meses, c.fecha_vencimiento
+         FROM solicitudes s
+         JOIN solicitantes p  ON p.id = s.solicitante_id
+         LEFT JOIN creditos c ON c.solicitud_id = s.id
+         WHERE s.id = $1 AND s.solicitante_id = $2`,
+        [solicitudId, req.solicitante.id]
+      );
+
+      if (!rows.length) {
+        return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
+      }
+
+      const sol = rows[0];
+
+      if (sol.estado_credito !== 'PAGADO') {
+        return res.status(403).json({
+          ok:      false,
+          message: 'La carta de término solo está disponible cuando el crédito ha sido liquidado en su totalidad.',
+          estado:  sol.estado_credito,
+        });
+      }
+
+      // Obtener fecha del último pago
+      const { rows: pagos } = await db(
+        `SELECT fecha_pago_real FROM amortizacion
+         WHERE credito_id = $1 AND pagado = TRUE
+         ORDER BY periodo DESC LIMIT 1`,
+        [sol.credito_id]
+      );
+      const fechaLiq = pagos.length && pagos[0].fecha_pago_real
+        ? new Date(pagos[0].fecha_pago_real)
+        : new Date(sol.fecha_vencimiento || Date.now());
+
+      const MESES_UP = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+                        'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+      const MESES_LO = ['enero','febrero','marzo','abril','mayo','junio',
+                        'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+      const fechaCiudad = `CIUDAD DE MÉXICO ${fechaLiq.getDate()} DE ${MESES_UP[fechaLiq.getMonth()]} DEL ${fechaLiq.getFullYear()}.`;
+      const fechaTexto  = `${fechaLiq.getDate()} del mes de ${MESES_LO[fechaLiq.getMonth()]} del año ${fechaLiq.getFullYear()}`;
+      const rep         = process.env.MUTUANTE_REP || 'MARCOS IVÁN DÍAZ BECERRA';
+      const nombre      = (sol.nombre_completo || '').toUpperCase();
+
+      const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Carta de Término de Préstamo — ${sol.folio}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Montserrat',Arial,sans-serif;font-size:13pt;color:#222;background:white}
+    .page{width:216mm;min-height:279mm;margin:0 auto;padding:18mm 20mm 24mm 20mm;display:flex;flex-direction:column}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10mm}
+    .logo-m{font-size:32pt;font-weight:900;color:#1BA896;line-height:1;letter-spacing:-1px}
+    .logo-m span{color:#222}
+    .logo-sub{font-size:7.5pt;color:#888;margin-top:2px}
+    .deco{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+    .titulo{text-align:center;color:#1BA896;font-size:14pt;font-weight:700;
+            letter-spacing:1px;margin-bottom:10mm;text-decoration:underline;text-underline-offset:4px}
+    .fecha{text-align:right;font-size:11pt;margin-bottom:14mm}
+    .cuerpo{flex:1;font-size:12pt;line-height:2.2;text-align:justify;margin-bottom:14mm}
+    .nombre{font-weight:700}
+    .firma{margin-top:10mm;text-align:center}
+    .firma-linea{width:220px;border-top:1.5px solid #222;margin:8mm auto 4mm}
+    .firma-nombre{font-size:11pt;font-weight:700}
+    .footer{margin-top:auto;padding-top:6mm;border-top:2px solid #1BA896;
+            display:flex;justify-content:center;align-items:center;gap:28px}
+    .footer-item{display:flex;align-items:center;gap:5px;font-size:8pt;color:#888;font-weight:600}
+    .fi{width:18px;height:18px;border-radius:50%;background:#1BA896;
+        display:flex;align-items:center;justify-content:center;color:white;font-size:8pt}
+    .print-btn{position:fixed;bottom:24px;right:24px;background:#1BA896;color:white;
+               border:none;border-radius:50px;padding:14px 28px;font-size:14px;
+               font-weight:700;cursor:pointer;font-family:inherit;
+               box-shadow:0 4px 16px rgba(27,168,150,.4);z-index:999}
+    @media print{.print-btn{display:none}}
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">⬇ Imprimir / Guardar PDF</button>
+  <div class="page">
+    <div class="header">
+      <div>
+        <div class="logo-m"><span>M</span>onety</div>
+        <div class="logo-sub">Soluciones financieras que te respaldan</div>
+      </div>
+      <div class="deco">
+        <div style="display:flex;gap:6px;">
+          <div style="width:55px;height:16px;background:#888;border-radius:20px;transform:rotate(-35deg)"></div>
+          <div style="width:20px;height:20px;background:#b0b0b0;border-radius:50%"></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <div style="width:42px;height:13px;background:#1BA896;border-radius:20px;transform:rotate(-35deg)"></div>
+          <div style="width:16px;height:16px;background:#1BA896;border-radius:50%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="titulo">CARTA DE TERMINO DE PRESTAMO</div>
+    <div class="fecha">${fechaCiudad}</div>
+
+    <div class="cuerpo">
+      Por medio de la presente se hace constar que el préstamo solicitado a nombre del C.
+
+      <span class="nombre">${nombre}</span> fue concluido el día ${fechaTexto}.
+
+      Asimismo, en su calidad de titular de este, se informa que dicho préstamo se
+
+      encuentra totalmente liquidado conforme a los pagos acordados.
+    </div>
+
+    <div class="firma">
+      <div style="font-size:11pt">En señal de conformidad se firma el documento.</div>
+      <div class="firma-linea"></div>
+      <div class="firma-nombre">${rep}</div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-item"><div class="fi">📸</div><span>@monety.finanzas</span></div>
+      <div class="footer-item"><div class="fi">🌐</div><span>www.monety.mx</span></div>
+      <div class="footer-item"><div class="fi">in</div><span>Monety</span></div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(html);
     } catch (err) { next(err); }
   }
 );
