@@ -1136,6 +1136,7 @@ function renderSolicitud(det) {
 /* ── CRÉDITO ─────────────────────────────────────────────── */
 function renderCredito(sol) {
   if (!sol.credito_id) return;
+  const estaPagado = sol.estado_credito === 'PAGADO';
   document.getElementById('creditoContent').innerHTML = `
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
@@ -1143,7 +1144,16 @@ function renderCredito(sol) {
           <div class="card-title">Condiciones del crédito</div>
           <div class="card-sub">${sol.folio}</div>
         </div>
-        ${sol.estado_credito ? badgeHtml(sol.estado_credito) : ''}
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${sol.estado_credito ? `<span class="badge ${sol.estado_credito.toLowerCase()}">${sol.estado_credito}</span>` : ''}
+          ${estaPagado ? `
+            <button onclick="verCartaTermino()"
+              style="background:rgba(63,185,80,.12);color:var(--green);border:1.5px solid var(--green);
+                     border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;
+                     font-family:inherit;display:flex;align-items:center;gap:6px;">
+              🏆 Ver Carta de Término
+            </button>` : ''}
+        </div>
       </div>
       <div class="card-body">
         <div class="info-grid">
@@ -1154,7 +1164,8 @@ function renderCredito(sol) {
           <div class="info-item"><div class="info-label">Pago mensual total</div>
             <div class="info-value">${fmtMXN(sol.pago_mensual_total)}</div></div>
           <div class="info-item"><div class="info-label">Saldo insoluto</div>
-            <div class="info-value" style="color:var(--amber)">${fmtMXN(sol.saldo_insoluto)}</div></div>
+            <div class="info-value" style="color:${estaPagado?'var(--green)':'var(--amber)'}">
+              ${estaPagado ? '✅ Liquidado' : fmtMXN(sol.saldo_insoluto)}</div></div>
           <div class="info-item"><div class="info-label">Tasa nominal anual</div>
             <div class="info-value">${(parseFloat(sol.tasa_nominal_anual||0)*100).toFixed(1)}%</div></div>
           <div class="info-item"><div class="info-label">CAT</div>
@@ -1166,8 +1177,55 @@ function renderCredito(sol) {
           <div class="info-item"><div class="info-label">Fecha de vencimiento</div>
             <div class="info-value">${fmtDate(sol.fecha_vencimiento)}</div></div>
         </div>
+        ${estaPagado ? `
+          <div style="margin-top:16px;background:rgba(63,185,80,.08);border-radius:10px;
+                      padding:14px 16px;border:1px solid var(--green);text-align:center;">
+            <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:4px">
+              🎉 ¡Préstamo liquidado completamente!
+            </div>
+            <div style="font-size:12px;color:var(--text-2)">
+              Puedes descargar tu Carta de Término como comprobante oficial.
+            </div>
+          </div>` : ''}
       </div>
     </div>
+    <div class="card">
+      <div class="card-header">
+        <div><div class="card-title">Tabla de amortización</div></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="amortTable">
+          <thead><tr>
+            <th>#</th><th>Fecha pago</th><th>Saldo inicial</th>
+            <th>Capital</th><th>Interés</th><th>IVA</th>
+            <th>Pago total</th><th>Saldo final</th><th>Estado</th>
+          </tr></thead>
+          <tbody id="amortBody"><tr><td colspan="9" style="text-align:center;padding:24px">
+            <div class="loader"></div>
+          </td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function verCartaTermino() {
+  if (!solicitudData?.id) { toast('No se puede abrir la carta', 'error'); return; }
+  try {
+    // Usar el endpoint del portal para carta de término
+    const res = await fetch(`${API}/carta-termino/${solicitudData.id}`, {
+      headers: { 'Authorization': `Bearer ${portalToken}` }
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      toast(d.message || 'El crédito aún no está liquidado', 'error');
+      return;
+    }
+    const html = await res.text();
+    const win  = window.open('', '_blank');
+    if (win) { win.document.open(); win.document.write(html); win.document.close(); }
+  } catch { toast('Error al abrir la carta', 'error'); }
+}
     <div class="card">
       <div class="card-header">
         <div><div class="card-title">Tabla de amortización</div></div>

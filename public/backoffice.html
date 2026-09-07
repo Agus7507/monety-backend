@@ -1095,6 +1095,10 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
         <button id="btnContrato" class="btn-sm ghost" onclick="abrirDocumento('contrato')" title="Contrato de Mutuo">
           📋 Contrato
         </button>
+        <button id="btnTermino" class="btn-sm ghost" onclick="abrirDocumento('termino')" title="Carta de Término"
+          style="display:none;background:rgba(63,185,80,.1);border-color:var(--green);color:var(--green);">
+          🏆 Carta de Término
+        </button>
       </div>
       <button class="btn-close" onclick="closeDetail()">×</button>
     </div>
@@ -1689,9 +1693,13 @@ async function loadDetailData(id, folio) {
 
   $('dFecha').textContent = `Solicitud del ${fmtDate(sol.fecha_solicitud)}`;
 
-  // Mostrar botones de documentos solo si está aprobada Y tenemos UUID
-  const estaAprobada = ['PRE_APROBADA', 'APROBADA'].includes(sol.estado);
+  // Mostrar botones de documentos
+  const estaAprobada = ['PRE_APROBADA','APROBADA'].includes(sol.estado);
+  const estaPagado   = sol.estado_credito === 'PAGADO';
   $('docBtns').style.display = (estaAprobada && currentSolId) ? 'flex' : 'none';
+  // Carta de término solo cuando el crédito está liquidado
+  const btnTermino = $('btnTermino');
+  if (btnTermino) btnTermino.style.display = estaPagado ? 'flex' : 'none';
 
   const maxScore = 140;
   const pts = {
