@@ -3,3 +3,8 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Respaldos y archivos temporales
+*.bak
+*.bak-*
+*.save
