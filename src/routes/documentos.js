@@ -7,7 +7,10 @@
 const router     = require('express').Router();
 const { param }  = require('express-validator');
 const { handleValidationErrors } = require('../middleware/errorHandler');
+
 const { authMiddleware }         = require('../middleware/auth');
+const { portalAuth } = require('./portal');
+
 const { query: db }              = require('../config/db');
 
 // ── Datos legales del MUTUANTE (configurables por env) ─────────────────────
@@ -28,6 +31,38 @@ const CONTACTO = {
   ig:       '@monety.finanzas',
   li:       'Monety',
 };
+
+
+function documentoAuth(req, res, next) {
+  const header = req.headers.authorization;
+
+  if (!header?.startsWith('Bearer ')) {
+    return res.status(401).json({
+      ok: false,
+      message: 'Sesión requerida',
+    });
+  }
+
+  const token = header.slice(7);
+
+  try {
+    const jwt = require('jsonwebtoken');
+
+    const payload = jwt.decode(token);
+
+    if (payload?.tipo === 'solicitante') {
+      return portalAuth(req, res, next);
+    }
+
+    return authMiddleware(req, res, next);
+  } catch (err) {
+    return res.status(401).json({
+      ok: false,
+      message: 'Token inválido',
+    });
+  }
+}
+
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -129,6 +164,11 @@ const BASE_CSS = `
   .carta-list { margin: 14px 0 14px 18px; }
   .carta-list li { margin-bottom: 8px; }
   .carta-list li strong { color: #111; }
+ 
+ .carta-documento .carta-cierre {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
   .firma-box { margin-top: 48px; }
   .firma-line { width: 280px; border-top: 1.5px solid #333; margin-bottom: 6px; }
   .firma-label { font-size: 10pt; color: #444; }
@@ -152,24 +192,140 @@ const BASE_CSS = `
   /* ── Print button ── */
   .print-bar { background: #1BA896; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
   .print-bar h3 { color: white; font-size: 14pt; }
-  .btn-print { background: white; color: #1BA896; border: none; padding: 10px 28px; border-radius: 8px; font-weight: 700; font-size: 13pt; cursor: pointer; }
+  .btn-print { background: white; color: #1BA896; border: none; padding: 10px 28px;
+   border-radius: 8px; font-weight: 700; font-size: 13pt; cursor: pointer; }
   .btn-print:hover { background: #e8f7f5; }
+
+
+  /* Carta de aprobación en una sola página */
+  .carta-documento .doc-wrap {
+    max-width: 760px;
+    padding: 16px 26px;
+  }
+
+  .carta-documento .header {
+    margin-bottom: 16px;
+    padding-bottom: 6px;
+  }
+
+  .carta-documento .logo-m {
+    width: 38px;
+    height: 38px;
+    font-size: 19px;
+  }
+
+  .carta-documento .logo-text {
+    font-size: 19px;
+  }
+
+  .carta-documento .carta-body {
+    line-height: 1.5;
+  }
+
+  .carta-documento .carta-fecha {
+    margin-bottom: 10px;
+  }
+
+  .carta-documento .carta-dest {
+    margin-bottom: 10px;
+    font-size: 11.5pt;
+  }
+
+  .carta-documento .carta-p {
+    margin-bottom: 8px;
+  }
+
+  .carta-documento .carta-list {
+    margin: 8px 0 10px 18px;
+  }
+
+  .carta-documento .carta-list li {
+    margin-bottom: 4px;
+  }
+
+  .carta-documento .firma-box {
+  position: relative;
+  margin-top: 18px;
+  padding-top: 48px;
+  width: 320px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.carta-documento .firma-line {
+  width: 320px;
+  border-top: 1.5px solid #333;
+  margin-bottom: 6px;
+}
+
+.carta-documento .firma-label {
+  font-size: 9.5pt;
+  color: #444;
+}  
+
+  .carta-documento .doc-footer {
+    margin-top: 20px;
+    padding-top: 9px;
+    gap: 28px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  @media print {
+    .carta-documento {
+      font-size: 9.5pt;
+    }
+
+    .carta-documento .doc-wrap {
+      max-width: none;
+      padding: 0;
+    }
+
+    .carta-documento .header {
+      margin-bottom: 12px;
+    }
+
+    .carta-documento .carta-body {
+      line-height: 1.4;
+    }
+
+    .carta-documento .carta-p {
+      margin-bottom: 7px;
+    }
+
+    .carta-documento .firma-box {
+  margin-top: 14px;
+  padding-top: 52px;
+  width: 320px;
+}
+
+.carta-documento .firma-line {
+  width: 320px;
+}
+
+.carta-documento .doc-footer {
+  margin-top: 22px;
+}
+    
+  }
+
+
 `;
 
 // ── Obtener datos completos de solicitud ────────────────────────────────────
 async function getDatosSolicitud(id) {
   const { rows } = await db(
     `SELECT
-       s.id, s.folio, s.estado, s.fecha_solicitud,
+       s.id, s.solicitante_id, s.folio, s.estado, s.fecha_solicitud,
        s.monto_solicitado, s.plazo_meses, s.tipo_credito, s.tipo_nomina,
        s.salario_mensual_neto, s.salario_mensual_bruto,
        s.historial_crediticio, s.antiguedad_anos,
        -- Solicitante
        p.nombres, p.apellido_pat, p.apellido_mat, p.curp,
        p.email, p.telefono,
-       TRIM(p.nombres + ' ' + p.apellido_pat + ' ' + ISNULL(p.apellido_mat, '')) AS nombre_completo,
+       TRIM(p.nombres || ' ' || p.apellido_pat || ' ' || COALESCE(p.apellido_mat, '')) AS nombre_completo,
        -- Empresa
-       ISNULL(e.nombre, 'Sin empresa') AS empresa_nombre,
+       COALESCE(e.nombre, 'Sin empresa') AS empresa_nombre,
        -- Evaluación
        ev.ranking, ev.puntaje_total, ev.resultado,
        ev.puntos_ingreso, ev.puntos_historial,
@@ -188,20 +344,61 @@ async function getDatosSolicitud(id) {
   return rows[0] || null;
 }
 
+
+
+function puedeConsultarDocumento(req, solicitud) {
+  /*
+   * Si el acceso proviene del portal, la solicitud debe
+   * pertenecer al solicitante autenticado.
+   */
+  if (req.solicitante) {
+    return (
+      String(solicitud.solicitante_id) ===
+      String(req.solicitante.id)
+    );
+  }
+
+  /*
+   * Si no existe req.solicitante, el acceso proviene del
+   * back-office y ya fue validado por authMiddleware.
+   */
+  return Boolean(req.user);
+}
+
+
 // ═══════════════════════════════════════════════════════════════
 // GET /api/v1/documentos/:id/carta   — Carta de Aprobación
 // ═══════════════════════════════════════════════════════════════
 router.get('/:id/carta',
-  authMiddleware,
+  documentoAuth,
   param('id').isUUID(),
   handleValidationErrors,
   async (req, res, next) => {
     try {
       const sol = await getDatosSolicitud(req.params.id);
-      if (!sol) return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
-      if (!['PRE_APROBADA', 'APROBADA'].includes(sol.estado)) {
-        return res.status(400).json({ ok: false, message: 'La solicitud debe estar aprobada para generar la carta' });
-      }
+
+if (!sol) {
+  return res.status(404).json({
+    ok: false,
+    message: 'Solicitud no encontrada',
+  });
+}
+
+if (!puedeConsultarDocumento(req, sol)) {
+  return res.status(403).json({
+    ok: false,
+    message: 'No tienes permiso para consultar esta carta.',
+  });
+}
+
+if (!['PRE_APROBADA', 'APROBADA'].includes(sol.estado)) {
+  return res.status(400).json({
+    ok: false,
+    message:
+      'La solicitud debe estar aprobada para generar la carta',
+  });
+}
+
 
       // Datos financieros
       const monto      = parseFloat(sol.monto_aprobado || sol.monto_solicitado);
@@ -237,10 +434,21 @@ router.get('/:id/carta',
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Carta de Aprobación — ${sol.folio}</title>
-<style>${BASE_CSS}</style>
+
+<style>
+  ${BASE_CSS}
+
+  @page {
+    size: letter;
+    margin: 10mm 14mm 12mm;
+  }
+</style>
+
 </head>
-<body>
+
+<body class="carta-documento">
 <div class="print-bar no-print">
   <h3>Carta de Aprobación · ${sol.folio}</h3>
   <button class="btn-print" onclick="window.print()">⬇ Imprimir / Guardar PDF</button>
@@ -288,10 +496,10 @@ router.get('/:id/carta',
 
     <p class="carta-p">Con aprecio,<br><strong>Monety.</strong></p>
 
-    <div class="firma-box">
-      <div class="firma-line"></div>
-      <div class="firma-label">Acepto</div>
-    </div>
+    <div class="carta-cierre">
+   <div class="firma-box">
+    <div class="firma-line"></div>
+    <div class="firma-label">Acepto</div>
   </div>
 
   <!-- FOOTER -->
@@ -300,7 +508,10 @@ router.get('/:id/carta',
     <span>🌐 ${CONTACTO.web}</span>
     <span>💼 ${CONTACTO.li}</span>
   </div>
+  </div>
+
 </div>
+
 <script>
   // Auto-print en modo producción si viene con ?print=1
   if (new URLSearchParams(window.location.search).get('print') === '1') {
@@ -320,16 +531,35 @@ router.get('/:id/carta',
 // GET /api/v1/documentos/:id/contrato  — Contrato de Mutuo
 // ═══════════════════════════════════════════════════════════════
 router.get('/:id/contrato',
-  authMiddleware,
+  documentoAuth,
   param('id').isUUID(),
   handleValidationErrors,
   async (req, res, next) => {
     try {
       const sol = await getDatosSolicitud(req.params.id);
-      if (!sol) return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
-      if (!['PRE_APROBADA', 'APROBADA'].includes(sol.estado)) {
-        return res.status(400).json({ ok: false, message: 'La solicitud debe estar aprobada para generar el contrato' });
-      }
+
+if (!sol) {
+  return res.status(404).json({
+    ok: false,
+    message: 'Solicitud no encontrada',
+  });
+}
+
+if (!puedeConsultarDocumento(req, sol)) {
+  return res.status(403).json({
+    ok: false,
+    message:
+      'No tienes permiso para consultar este contrato.',
+  });
+}
+
+if (!['PRE_APROBADA', 'APROBADA'].includes(sol.estado)) {
+  return res.status(400).json({
+    ok: false,
+    message:
+      'La solicitud debe estar aprobada para generar el contrato',
+  });
+}
 
       const monto    = parseFloat(sol.monto_aprobado || sol.monto_solicitado);
       const plazo    = parseInt(sol.plazo_meses);

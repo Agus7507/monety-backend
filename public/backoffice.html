@@ -447,8 +447,26 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
 .empty-state .es-text { font-size: 14px; }
 
 /* ── DETAIL TABS ─────────────────────────────────────────── */
-.detail-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 24px; background: var(--bg-surface); }
-.detail-tab { padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
+.detail-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  background: var(--bg-surface);
+}
+.detail-tab {
+  flex: 1 1 30%;
+  min-width: 170px;
+  padding: 12px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+  white-space: nowrap;
+  text-align: center;
+}
 .detail-tab:hover { color: var(--text-1); }
 .detail-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
 .detail-tab-content { display: none; }
@@ -558,7 +576,14 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
         <button class="nav-item" data-page="layouts" onclick="navigate('layouts',this)">
           <span class="nav-icon">🗂</span> Layouts Nómina
         </button>
-      </div>
+
+	<button class="nav-item" data-page="reportes"
+	onclick="navigate('reportes', this)">
+	<span class="nav-icon">📊</span>
+	Reportes
+	</button>
+      
+       </div>
 
       <div class="sidebar-section">
         <div class="sidebar-section-label">Herramientas</div>
@@ -765,6 +790,7 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
                 <thead><tr>
                   <th>Folio</th><th>Acreditado</th><th>Empresa</th><th>Saldo</th>
                   <th>Próximo pago</th><th>Días vencido</th><th>Estado</th>
+		  <th style="text-align:center;">Acciones</th>
                 </tr></thead>
                 <tbody id="tbCartera"></tbody>
               </table>
@@ -882,6 +908,144 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
 
         </div>
       </div>
+
+
+<!-- REPORTES -->
+<div class="page" id="page-reportes">
+
+<section id="section-reportes" class="section-view">
+  <div class="page-header">
+    <div>
+      <h1>Reportes</h1>
+      <p>Consulta de créditos, cartera, vencimientos e ingresos cobrados</p>
+    </div>
+  </div>
+
+  <div class="card" style="padding:18px;margin-bottom:18px;">
+    <div style="
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+      gap:12px;
+    ">
+      <button
+        type="button"
+        class="btn-secondary"
+        onclick="seleccionarReporte('creditos-activos', this)"
+      >
+        📋 Créditos activos
+      </button>
+
+      <button
+        type="button"
+        class="btn-secondary"
+        onclick="seleccionarReporte('cartera-detalle', this)"
+      >
+        📊 Cartera a detalle
+      </button>
+
+      <button
+        type="button"
+        class="btn-secondary"
+        onclick="seleccionarReporte('vencimientos', this)"
+      >
+        📅 Vencimientos
+      </button>
+
+      <button
+        type="button"
+        class="btn-secondary"
+        onclick="seleccionarReporte('ingresos-cobrados', this)"
+      >
+        💰 Ingresos cobrados
+      </button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:18px;margin-bottom:18px;">
+    <div style="
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+      gap:12px;
+      align-items:end;
+    ">
+      <div>
+        <label>Fecha inicial</label>
+        <input type="date" id="reporteFechaInicio">
+      </div>
+
+      <div>
+        <label>Fecha final</label>
+        <input type="date" id="reporteFechaFin">
+      </div>
+
+      <div>
+        <label>Empresa</label>
+        <select id="reporteEmpresa">
+          <option value="">Todas las empresas</option>
+        </select>
+      </div>
+
+      <div id="contenedorSituacionReporte" style="display:none;">
+        <label>Situación</label>
+        <select id="reporteSituacion">
+          <option value="">Todas</option>
+          <option value="POR_VENCER">Por vencer</option>
+          <option value="VENCE_HOY">Vence hoy</option>
+          <option value="VENCIDO">Vencido</option>
+          <option value="PAGADO">Pagado</option>
+        </select>
+      </div>
+
+      <button
+        type="button"
+        class="btn-primary"
+        onclick="consultarReporte()"
+      >
+        Consultar
+      </button>
+
+      <button
+        type="button"
+        class="btn-secondary"
+        onclick="exportarReporteCSV()"
+      >
+        Exportar CSV
+      </button>
+    </div>
+  </div>
+
+  <div
+    id="reporteResumen"
+    style="
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+      gap:12px;
+      margin-bottom:18px;
+    "
+  ></div>
+
+  <div class="card" style="overflow:hidden;">
+    <div style="padding:16px;border-bottom:1px solid var(--border);">
+      <h3 id="reporteTitulo">Selecciona un reporte</h3>
+    </div>
+
+    <div style="overflow:auto;max-height:590px;">
+      <table style="width:100%;min-width:1000px;">
+        <thead id="reporteEncabezado"></thead>
+        <tbody id="reporteCuerpo">
+          <tr>
+            <td style="padding:30px;text-align:center;color:var(--text-2);">
+              Selecciona un reporte y presiona Consultar
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+      </div>
+
 
       <!-- ── SIMULADOR ANALISTA ──────────────────────────────── -->
       <div class="page" id="page-simulador_anl">
@@ -1120,6 +1284,328 @@ tbody tr:hover { background: var(--bg-hover); cursor: pointer; }
 <!-- ══ TOASTS ═══════════════════════════════════════════════ -->
 <div id="toastContainer"></div>
 
+
+<!-- MODAL APLICAR PAGO -->
+<div
+  id="modalAplicarPago"
+  class="modal-overlay"
+  style="
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    background:rgba(0,0,0,.72);
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  "
+>
+  <div
+    class="card"
+    style="
+      width:min(620px,100%);
+      max-height:92vh;
+      overflow-y:auto;
+      padding:0;
+      border-radius:16px;
+    "
+  >
+    <div
+      style="
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        padding:18px 22px;
+        border-bottom:1px solid var(--border);
+      "
+    >
+      <div>
+        <h2 style="margin:0;font-size:18px;">
+          Aplicar pago
+        </h2>
+
+        <div
+          id="pagoModalFolio"
+          style="
+            margin-top:4px;
+            font-size:12px;
+            color:var(--text-2);
+          "
+        >
+          -
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onclick="cerrarModalPago()"
+        style="
+          width:36px;
+          height:36px;
+          border:0;
+          border-radius:9px;
+          background:var(--bg-raised);
+          color:var(--text-1);
+          cursor:pointer;
+          font-size:18px;
+        "
+      >
+        ×
+      </button>
+    </div>
+
+    <div style="padding:20px 22px;">
+      <input
+        type="hidden"
+        id="pagoCreditoId"
+      >
+
+      <!-- Resumen del crédito -->
+      <div
+        style="
+          background:var(--bg-raised);
+          border:1px solid var(--border);
+          border-radius:12px;
+          padding:14px;
+          margin-bottom:18px;
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:12px;
+        "
+      >
+        <div>
+          <div class="info-label">Acreditado</div>
+          <div
+            id="pagoAcreditado"
+            style="font-weight:700;"
+          >
+            -
+          </div>
+        </div>
+
+        <div>
+          <div class="info-label">Empresa</div>
+          <div
+            id="pagoEmpresa"
+            style="font-weight:700;"
+          >
+            -
+          </div>
+        </div>
+
+        <div>
+          <div class="info-label">Saldo insoluto</div>
+          <div
+            id="pagoSaldoInsoluto"
+            style="
+              font-weight:800;
+              color:var(--teal);
+              font-size:17px;
+            "
+          >
+            $0.00
+          </div>
+        </div>
+
+        <div>
+          <div class="info-label">
+            Saldo del calendario
+          </div>
+          <div
+            id="pagoSaldoCalendario"
+            style="font-weight:700;"
+          >
+            $0.00
+          </div>
+        </div>
+
+        <div>
+          <div class="info-label">
+            Parcialidades pendientes
+          </div>
+          <div
+            id="pagoParcialidades"
+            style="font-weight:700;"
+          >
+            0
+          </div>
+        </div>
+
+        <div>
+          <div class="info-label">
+            Próximo vencimiento
+          </div>
+          <div
+            id="pagoProximoVencimiento"
+            style="font-weight:700;"
+          >
+            -
+          </div>
+        </div>
+      </div>
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:14px;
+        "
+      >
+        <div>
+          <label class="form-label">
+            Tipo de pago *
+          </label>
+
+          <select
+            id="pagoTipo"
+            class="form-input"
+            onchange="cambiarTipoPago()"
+          >
+            <option value="MANUAL">
+              Pago manual
+            </option>
+
+            <option value="PARCIAL">
+              Pago parcial
+            </option>
+
+            <option value="LIQUIDACION">
+              Liquidación
+            </option>
+
+            <option value="NOMINA">
+              Descuento de nómina
+            </option>
+
+            <option value="AJUSTE">
+              Ajuste
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label class="form-label">
+            Fecha de pago *
+          </label>
+
+          <input
+            type="date"
+            id="pagoFecha"
+            class="form-input"
+          >
+        </div>
+
+        <div>
+          <label class="form-label">
+            Importe recibido *
+          </label>
+
+          <input
+            type="number"
+            id="pagoMonto"
+            class="form-input"
+            min="0.01"
+            step="0.01"
+            placeholder="0.00"
+          >
+        </div>
+
+        <div>
+          <label class="form-label">
+            Referencia
+          </label>
+
+          <input
+            type="text"
+            id="pagoReferencia"
+            class="form-input"
+            maxlength="120"
+            placeholder="Transferencia, depósito, recibo..."
+          >
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <label class="form-label">
+          Observaciones
+        </label>
+
+        <textarea
+          id="pagoObservaciones"
+          class="form-input"
+          rows="3"
+          placeholder="Comentarios relacionados con el pago"
+        ></textarea>
+      </div>
+
+      <div
+        id="pagoAvisoLiquidacion"
+        style="
+          display:none;
+          margin-top:14px;
+          padding:12px 14px;
+          border-radius:10px;
+          background:rgba(245,158,11,.12);
+          border:1px solid rgba(245,158,11,.35);
+          color:#f59e0b;
+          font-size:12px;
+          line-height:1.5;
+        "
+      >
+        La liquidación aplicará el importe contra las
+        parcialidades pendientes. Verifica el monto antes
+        de continuar.
+      </div>
+
+      <div
+        id="pagoError"
+        style="
+          display:none;
+          margin-top:14px;
+          padding:12px 14px;
+          border-radius:10px;
+          background:rgba(239,68,68,.12);
+          border:1px solid rgba(239,68,68,.35);
+          color:#ef4444;
+          font-size:12px;
+        "
+      ></div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:flex-end;
+          gap:10px;
+          margin-top:20px;
+          padding-top:16px;
+          border-top:1px solid var(--border);
+        "
+      >
+        <button
+          type="button"
+          class="btn-secondary"
+          onclick="cerrarModalPago()"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="button"
+          id="btnConfirmarPago"
+          class="btn-primary"
+          onclick="aplicarPagoManual()"
+        >
+          Aplicar pago
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+
 <script>
 /* ══════════════════════════════════════════════════════════
    CONFIG
@@ -1158,10 +1644,24 @@ function fmt(n, dec = 2) {
   });
 }
 function fmtMXN(n) { return '$' + fmt(n); }
-function fmtDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' });
+
+function fmtDate(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const fechaISO = String(value).substring(0, 10);
+  const partes = fechaISO.split('-');
+
+  if (partes.length !== 3) {
+    return value;
+  }
+
+  const [anio, mes, dia] = partes;
+
+  return `${dia}/${mes}/${anio}`;
 }
+
 
 const ESTADO_LABELS = {
   PENDIENTE:    ['pending',  'Pendiente'],
@@ -1307,6 +1807,8 @@ function navigate(page, btn) {
   if (page === 'cartera')       loadCartera();
   if (page === 'empresas')      loadEmpresas();
   if (page === 'layouts')       loadLayouts();
+  if (page === 'reportes') {cargarEmpresasReporte();
+  seleccionarReporte('creditos-activos'); }
   if (page === 'simulador_anl') { initSim(); calcSim(); renderPropuestas(); }
 }
 
@@ -1552,6 +2054,9 @@ async function loadCartera() {
     data = d.cartera;
     const cr = await apiFetch('/creditos');
     rows = cr.data || [];
+
+console.log('Primer crédito de Cartera:', rows[0]);
+
   } catch {
     rows = DEMO_SOLIS.filter(s=>s.estado==='APROBADA').slice(0,8).map(s=>({
       folio:s.folio, acreditado:s.nombre,
@@ -1592,17 +2097,106 @@ async function loadCartera() {
     if (pagados >= (r.plazo_meses || 12)) return '—';
     return prox.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
   }
+ 
+  $('tbCartera').innerHTML = rows.map(r => {
+  const creditoId = r.credito_id || r.id || '';
 
-  $('tbCartera').innerHTML = rows.map(r => `
+  const puedeAplicarPago =
+    creditoId &&
+    !['PAGADO', 'CANCELADO'].includes(r.estado);
+
+  return `
     <tr>
-      <td class="td-mono" style="color:var(--teal)">${r.folio}</td>
-      <td>${r.acreditado||r.nombre}</td>
-      <td>${r.empresa || '—'}</td>
-      <td style="font-weight:600">${fmtMXN(r.saldo_insoluto)}</td>
-      <td style="font-size:12px;font-weight:500;color:var(--text-1)">${proximoPago(r)}</td>
-      <td>${r.dias_vencido > 0 ? `<span style="color:var(--red);font-weight:700">${r.dias_vencido}d</span>` : '<span style="color:var(--text-3)">—</span>'}</td>
-      <td><span class="badge ${r.estado==='ACTIVO'?'approved':'rejected'}">${r.estado}</span></td>
-    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:30px">Sin datos</td></tr>';
+      <td class="td-mono" style="color:var(--teal)">
+        ${escapeHtml(r.folio || '—')}
+      </td>
+
+      <td>
+        ${escapeHtml(r.acreditado || r.nombre || '—')}
+      </td>
+
+      <td>
+        ${escapeHtml(r.empresa || '—')}
+      </td>
+
+      <td style="font-weight:600">
+        ${fmtMXN(r.saldo_insoluto)}
+      </td>
+
+      <td style="
+        font-size:12px;
+        font-weight:500;
+        color:var(--text-1);
+      ">
+        ${proximoPago(r)}
+      </td>
+
+      <td>
+        ${
+          Number(r.dias_vencido || 0) > 0
+            ? `
+              <span style="color:var(--red);font-weight:700">
+                ${r.dias_vencido}d
+              </span>
+            `
+            : `
+              <span style="color:var(--text-3)">
+                —
+              </span>
+            `
+        }
+      </td>
+
+      <td>
+        <span class="badge ${
+          ['ACTIVO', 'PAGADO'].includes(r.estado)
+            ? 'approved'
+            : 'rejected'
+        }">
+          ${escapeHtml(r.estado || '—')}
+        </span>
+      </td>
+
+      <td style="white-space:nowrap;text-align:center;">
+        ${
+          puedeAplicarPago
+            ? `
+              <button
+                type="button"
+                class="btn-sm primary"
+                onclick="abrirModalPago('${creditoId}')"
+              >
+                Aplicar pago
+              </button>
+            `
+            : `
+              <button
+                type="button"
+                class="btn-sm"
+                disabled
+              >
+                No disponible
+              </button>
+            `
+        }
+      </td>
+    </tr>
+  `;
+}).join('') || `
+  <tr>
+    <td
+      colspan="8"
+      style="
+        text-align:center;
+        color:var(--text-3);
+        padding:30px;
+      "
+    >
+      Sin datos
+    </td>
+  </tr>
+`;
+
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1629,6 +2223,47 @@ async function loadEmpresas() {
       <td><span class="badge ${r.activa?'approved':'cancelled'}">${r.activa?'Activa':'Inactiva'}</span></td>
     </tr>`).join('');
 }
+
+async function cargarEmpresasReporte() {
+  const select = $('reporteEmpresa');
+
+  if (!select) {
+    return;
+  }
+
+  try {
+    const respuesta = await apiFetch('/empresas');
+    const empresas =
+      respuesta.empresas ||
+      respuesta.data ||
+      [];
+
+    select.innerHTML = `
+      <option value="">Todas las empresas</option>
+
+      ${empresas
+        .filter(empresa => empresa.activa !== false)
+        .map(empresa => `
+          <option value="${empresa.id}">
+            ${escapeHtml(empresa.nombre)}
+          </option>
+        `)
+        .join('')}
+    `;
+  } catch (error) {
+    console.error(
+      'No fue posible cargar empresas para reportes:',
+      error
+    );
+
+    select.innerHTML = `
+      <option value="">Todas las empresas</option>
+    `;
+  }
+}
+
+
+
 
 /* ══════════════════════════════════════════════════════════
    DETAIL PANEL
@@ -2063,20 +2698,33 @@ function calcularLiquidacionLFT(salarioBruto, antiguedadAnos, fechaIngreso) {
   const aguinaldoProp   = salarioDiario * 15 * (diasEnAnio / 365);
 
   // Vacaciones proporcionales (Art. 76 LFT - tabla por años)
-  function diasVacaciones(a) {
-    if (a < 1)  return 6  * (a);
-    if (a < 2)  return 6;
-    if (a < 3)  return 8;
-    if (a < 4)  return 10;
-    if (a < 5)  return 12;
-    if (a < 10) return 14 + Math.floor(a - 5) * 2;
-    if (a < 15) return 22 + Math.floor(a - 10) * 2;
-    return 32;
-  }
-  const diasVac         = diasVacaciones(anos);
+  function diasVacaciones(a) { 
+  if (a < 1) return 12;
+ 
+  const aniosCompletos = Math.floor(a);
+  
+  if (aniosCompletos === 1) return 12;
+  if (aniosCompletos === 2) return 14;
+  if (aniosCompletos === 3) return 16;
+  if (aniosCompletos === 4) return 18;
+  if (aniosCompletos === 5) return 20;
+  if (aniosCompletos <= 10) return 22;
+  if (aniosCompletos <= 15) return 24;
+  if (aniosCompletos <= 20) return 26;
+  if (aniosCompletos <= 25) return 28;
+  if (aniosCompletos <= 30) return 30;
+  if (aniosCompletos <= 35) return 32;
+  return 32 + Math.floor((aniosCompletos - 31) / 5) * 2;
+}
+
   // Proporcional al año en curso (fracción del último año)
-  const fracAnioActual  = (mesesFrac % 12) / 12;
-  const vacacionesProp  = salarioDiario * diasVac * fracAnioActual;
+
+  const diasVacAnuales = diasVacaciones(anos);
+  const fraccionAnioActual = (mesesFrac % 12) / 12;
+  const diasVacProporcionales = diasVacAnuales * fraccionAnioActual;
+  const vacacionesProp = salarioDiario * diasVacProporcionales;
+
+
 
   // Prima vacacional proporcional (Art. 80 LFT - 25% mínimo)
   const primaVacacProp  = vacacionesProp * 0.25;
@@ -2089,7 +2737,7 @@ function calcularLiquidacionLFT(salarioBruto, antiguedadAnos, fechaIngreso) {
   const montoMaxPrestamo= totalLiquidacion * PCT_MAX_PRESTAMO;
 
   return {
-    salarioDiario, salarioDiarioTope, anos, diasVac: Math.round(diasVac),
+    salarioDiario, salarioDiarioTope, anos, diasVac: Math.round(diasVacAnuales),
     tresMeses, veinteDiasPorAnio, primaAntiguedad,
     aguinaldoProp, vacacionesProp, primaVacacProp,
     subtotalIndem, subtotalPrimas, subtotalPropor,
@@ -2119,18 +2767,29 @@ function calcularFiniquitoLFT(salarioBruto, antiguedadAnos, fechaSalida) {
 
   // ── 2. Vacaciones proporcionales (Art. 76 LFT) ──
   function diasVacaciones(a) {
-    if (a < 1)  return 6 * a;
-    if (a < 2)  return 6;
-    if (a < 3)  return 8;
-    if (a < 4)  return 10;
-    if (a < 5)  return 12;
-    if (a < 10) return 14 + Math.floor(a - 5) * 2;
-    if (a < 15) return 22 + Math.floor(a - 10) * 2;
-    return 32;
-  }
-  const diasVac        = diasVacaciones(anos);
-  const fracAnioActual = (mesesFrac % 12) / 12;
-  const vacacionesProp = salarioDiario * diasVac * fracAnioActual;
+  if (a < 1) return 12;
+
+  const aniosCompletos = Math.floor(a);
+
+  if (aniosCompletos === 1) return 12;
+  if (aniosCompletos === 2) return 14;
+  if (aniosCompletos === 3) return 16;
+  if (aniosCompletos === 4) return 18;
+  if (aniosCompletos === 5) return 20;
+  if (aniosCompletos <= 10) return 22;
+  if (aniosCompletos <= 15) return 24;
+  if (aniosCompletos <= 20) return 26;
+  if (aniosCompletos <= 25) return 28;
+  if (aniosCompletos <= 30) return 30;
+  if (aniosCompletos <= 35) return 32;
+  return 32 + Math.floor((aniosCompletos - 31) / 5) * 2;
+}
+
+  const diasVacAnuales = diasVacaciones(anos);
+  const fraccionAnioActual = (mesesFrac % 12) / 12;
+  const diasVacProporcionales = diasVacAnuales * fraccionAnioActual;
+  const vacacionesProp = salarioDiario * diasVacProporcionales;
+
 
   // ── 3. Prima vacacional proporcional (Art. 80 LFT — 25% mínimo) ──
   const primaVacacProp = vacacionesProp * 0.25;
@@ -2151,7 +2810,7 @@ function calcularFiniquitoLFT(salarioBruto, antiguedadAnos, fechaSalida) {
   const montoMaxPrestamo = totalFiniquito * PCT_MAX_PRESTAMO;
 
   return {
-    salarioDiario, anos, diasVac: Math.round(diasVac), diasEnAnio,
+    salarioDiario, anos, diasVac: Math.round(diasVacAnuales), diasEnAnio,
     aguinaldoProp, vacacionesProp, primaVacacProp,
     primaAntiguedad, primaAntigApplica: anos >= 15,
     salariosDevengados, diasPendientes,
@@ -2254,10 +2913,24 @@ function calcLiquidacionHTML(sol) {
                 border:1px solid rgba(27,168,150,.3);margin-bottom:16px;
                 display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
       <div style="font-size:12px;font-weight:600;color:var(--teal);">📅 Fecha de salida del empleado</div>
-      <input type="date" id="liqFechaSalida" value="${fechaDefecto}"
-        onchange="recalcularLiquidacion('${currentSolId}')"
-        style="padding:7px 12px;background:var(--bg-raised);border:1.5px solid var(--border);
-               border-radius:8px;color:var(--text-1);font-size:13px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+  <input
+    type="date"
+    id="liqFechaSalida"
+    value="${fechaDefecto}"
+    min="2000-01-01"
+    max="2100-12-31"
+    style="padding:7px 12px; background:var(--bg-raised); border:1.5px solid var(--border); border-radius:8px; color:var(--text-1); font-size:13px;
+    ">
+  <button
+    type="button"
+    onclick="recalcularLiquidacion('${currentSolId}')"
+    style=" padding:8px 14px; background:var(--teal); border:none; border-radius:8px; color:#fff; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
+    ">
+    Aplicar fecha
+  </button>
+</div>
+
       <div style="font-size:11px;color:var(--text-2);">
         Antigüedad: <b>${antiguedad.toFixed(1)} años</b> ·
         Salario diario: <b>${fmtMXN(liq.salarioDiario)}</b> ·
@@ -2995,78 +3668,6 @@ function calcPagoQuincenal(pagoMens) {
   return pagoMens / 2;
 }
 
-function renderLayouts() {
-  const empFiltro  = $('layoutEmpresa')?.value   || '';
-  const periodo    = $('layoutPeriodo')?.value    || '';
-  const tipo       = $('layoutTipo')?.value       || 'descuento';
-  const [anio, mes]= (periodo || '2026-01').split('-').map(Number);
-
-  let data = layoutData;
-  if (empFiltro) data = data.filter(c => String(c.empresa_id) === empFiltro || c.empresa === empFiltro);
-
-  // KPIs
-  const totalCreditos = data.length;
-  const totalImporte  = data.reduce((s, c) => {
-    const pago = c.tipo_nomina === 'QUINCENAL' ? calcPagoQuincenal(c.pago_mensual_total) : c.pago_mensual_total;
-    return s + pago;
-  }, 0);
-  const pagados  = data.filter(c => c.pagado).length;
-  const empresas = [...new Set(data.map(c => c.empresa))].length;
-
-  $('layoutKpis').innerHTML = `
-    <div class="stat-card"><div class="stat-header"><span class="stat-label">Créditos en layout</span><div class="stat-icon teal">◎</div></div><div class="stat-value">${totalCreditos}</div><div class="stat-change">activos</div></div>
-    <div class="stat-card"><div class="stat-header"><span class="stat-label">Total a recuperar</span><div class="stat-icon green">$</div></div><div class="stat-value" style="font-size:20px">${fmtMXN(totalImporte)}</div><div class="stat-change">este periodo</div></div>
-    <div class="stat-card"><div class="stat-header"><span class="stat-label">Confirmados pagados</span><div class="stat-icon teal">✓</div></div><div class="stat-value" style="color:var(--green)">${pagados}</div><div class="stat-change">de ${totalCreditos}</div></div>
-    <div class="stat-card"><div class="stat-header"><span class="stat-label">Empresas</span><div class="stat-icon amber">⬡</div></div><div class="stat-value">${empresas}</div><div class="stat-change">con créditos activos</div></div>
-  `;
-
-  const esDes = tipo === 'descuento';
-
-  // Cabecera de la tabla
-  $('layoutTableTitle').textContent = esDes
-    ? `Aviso a empresa para descuentos — ${new Date(anio, mes-1).toLocaleDateString('es-MX',{month:'long',year:'numeric'})}`
-    : `Aviso de recuperación de pagos — ${new Date(anio, mes-1).toLocaleDateString('es-MX',{month:'long',year:'numeric'})}`;
-  $('layoutTableSub').textContent = `${data.length} créditos · Total: ${fmtMXN(totalImporte)}`;
-
-  $('layoutThead').innerHTML = `<tr>
-    <th><input type="checkbox" onchange="toggleAll(this)" style="accent-color:var(--teal)"></th>
-    <th>Empresa</th><th>Empleado</th><th>RFC</th><th>Tipo</th>
-    <th>ID Crédito</th>
-    ${esDes ? '<th>Descuentos</th>' : '<th>No. Desc.</th>'}
-    <th>Importe</th><th>Estado</th>
-  </tr>`;
-
-  $('tbLayouts').innerHTML = data.map((c, i) => {
-    const pago = c.tipo_nomina === 'QUINCENAL' ? calcPagoQuincenal(c.pago_mensual_total) : c.pago_mensual_total;
-    const numDesc = esDes
-      ? (c.tipo_nomina === 'QUINCENAL' ? c.plazo_meses * 2 : c.plazo_meses)
-      : `${c.periodo_actual}/${c.tipo_nomina === 'QUINCENAL' ? c.plazo_meses * 2 : c.plazo_meses}`;
-    const estadoBadge = c.pagado
-      ? '<span class="layout-badge-paid">Pagado</span>'
-      : '<span class="layout-badge-pend">Pendiente</span>';
-    return `<tr class="${c.pagado ? 'layout-paid' : ''}">
-      <td><input type="checkbox" class="layout-chk" data-idx="${i}" ${c.pagado?'disabled checked':''} style="accent-color:var(--teal)"></td>
-      <td style="font-weight:600">${c.empresa}</td>
-      <td>${c.acreditado}</td>
-      <td class="td-mono" style="font-size:11px">${c.rfc || '—'}</td>
-      <td><span style="background:var(--bg-active);padding:2px 8px;border-radius:4px;font-size:11px">${c.tipo_nomina}</span></td>
-      <td class="td-mono" style="color:var(--teal)">${c.folio}</td>
-      <td style="text-align:center;font-weight:600">${numDesc}</td>
-      <td style="font-weight:700;color:${c.pagado?'var(--text-3)':'var(--text-1)'}">${fmtMXN(pago)}</td>
-      <td>${estadoBadge}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:30px">Sin créditos para este filtro</td></tr>';
-
-  // Totales
-  $('layoutTfoot').innerHTML = `<tr style="background:var(--bg-raised);">
-    <td colspan="7" style="padding:12px 16px;font-weight:700;text-align:right;color:var(--text-2)">TOTAL</td>
-    <td style="padding:12px 16px;font-weight:800;color:var(--teal);font-size:15px">${fmtMXN(totalImporte)}</td>
-    <td></td>
-  </tr>`;
-
-  // Historial
-  renderHistorialPagos(data.filter(c => c.pagado));
-}
 
 function renderHistorialPagos(pagados) {
   $('tbHistorialPagos').innerHTML = pagados.length
@@ -3243,30 +3844,286 @@ async function loadExpediente(solicitudId) {
       return;
     }
 
-    const TIPO_ICONS = { INE_FRENTE:'🪪', INE_REVERSO:'🪪', CURP:'📄', RFC:'📄',
-      COMPROBANTE_DOMICILIO:'🏠', COMPROBANTE_INGRESOS:'💰', RECIBO_NOMINA:'💼',
-      ESTADO_CUENTA:'🏦', CONTRATO_LABORAL:'📋', CONTRATO_CREDITO:'📋', OTRO:'📎' };
 
-    container.innerHTML = docs.map(doc => `
-      <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">
-        <div style="font-size:24px;flex-shrink:0">${TIPO_ICONS[doc.tipo]||'📎'}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px">${doc.tipo.replace(/_/g,' ')}</div>
-          <div style="font-size:13px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc.nombre_archivo}</div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:2px">${(doc.tamanio_bytes/1024).toFixed(0)} KB · ${fmtDate(doc.created_at)}</div>
+   const TIPO_ICONS = {
+  INE_FRENTE: '🪪',
+  INE_REVERSO: '🪪',
+  CURP: '📄',
+  RFC: '📄',
+  COMPROBANTE_DOMICILIO: '🏠',
+  COMPROBANTE_INGRESOS: '💰',
+  RECIBO_NOMINA: '💼',
+  ESTADO_CUENTA: '🏦',
+  CONSTANCIA_SAT: '📄',
+  CONTRATO_LABORAL: '📋',
+  CONTRATO_CREDITO: '📋',
+  CARTA_APROBACION_FIRMADA: '✍️',
+  CONTRATO_CREDITO_FIRMADO: '📝',
+  OTRO: '📎',
+};
+
+const TIPO_LABELS = {
+  INE_FRENTE: 'INE / IFE, frente',
+  INE_REVERSO: 'INE / IFE, reverso',
+  CURP: 'CURP',
+  RFC: 'RFC',
+  COMPROBANTE_DOMICILIO:
+    'Comprobante de domicilio',
+  COMPROBANTE_INGRESOS:
+    'Comprobante de ingresos',
+  RECIBO_NOMINA: 'Recibo de nómina',
+  ESTADO_CUENTA: 'Estado de cuenta',
+  CONSTANCIA_SAT:
+    'Constancia de situación fiscal',
+  CONTRATO_LABORAL: 'Contrato laboral',
+  CONTRATO_CREDITO: 'Contrato de crédito',
+  CARTA_APROBACION_FIRMADA:
+    'Carta de aprobación firmada',
+  CONTRATO_CREDITO_FIRMADO:
+    'Contrato de crédito firmado',
+  OTRO: 'Otro documento',
+};
+
+
+
+
+container.innerHTML = docs.map(doc => {
+  const estado =
+    doc.estado ||
+    (
+      doc.verificado
+        ? 'APROBADO'
+        : 'EN_REVISION'
+    );
+
+  const esFirmado = [
+    'CARTA_APROBACION_FIRMADA',
+    'CONTRATO_CREDITO_FIRMADO',
+  ].includes(doc.tipo);
+
+  const configuracionEstado = {
+    CARGADO: {
+      texto: 'Cargado',
+      color: 'var(--teal)',
+      fondo: 'rgba(27,168,150,.10)',
+    },
+    EN_REVISION: {
+      texto: 'En revisión',
+      color: 'var(--blue)',
+      fondo: 'rgba(88,166,255,.12)',
+    },
+    APROBADO: {
+      texto: 'Aprobado',
+      color: 'var(--green)',
+      fondo: 'rgba(63,185,80,.12)',
+    },
+    RECHAZADO: {
+      texto: 'Rechazado',
+      color: 'var(--red)',
+      fondo: 'rgba(248,81,73,.12)',
+    },
+  };
+
+  const estadoVisual =
+    configuracionEstado[estado] ||
+    configuracionEstado.EN_REVISION;
+
+  const nombreTipo =
+    TIPO_LABELS[doc.tipo] ||
+    doc.tipo.replace(/_/g, ' ');
+
+  const tamanioKb =
+    Number(doc.tamanio_bytes || 0) / 1024;
+
+  return `
+    <div
+      style="
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+        padding:14px 0;
+        border-bottom:1px solid var(--border);
+      "
+    >
+      <div
+        style="
+          font-size:24px;
+          flex-shrink:0;
+        "
+      >
+        ${TIPO_ICONS[doc.tipo] || '📎'}
+      </div>
+
+      <div
+        style="
+          flex:1;
+          min-width:0;
+        "
+      >
+        <div
+          style="
+            font-size:12px;
+            font-weight:700;
+            color:var(--teal);
+            text-transform:uppercase;
+            letter-spacing:.5px;
+          "
+        >
+          ${nombreTipo}
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-items:flex-end;">
-          <button class="btn-sm ghost" style="font-size:11px;padding:4px 10px;"
-            onclick="verDocumento('${currentSolId}','${doc.id}','${doc.mime_type}')">👁 Ver</button>
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;color:${doc.verificado?'var(--green)':'var(--text-2)'}">
-            <input type="checkbox" ${doc.verificado?'checked':''} style="accent-color:var(--teal)"
-              onchange="verificarDoc('${currentSolId}','${doc.id}',this.checked)">
-            ${doc.verificado?'✓ Verificado':'Verificar'}
-          </label>
-          <button class="btn-sm ghost" style="font-size:11px;padding:4px 10px;color:var(--red);"
-            onclick="eliminarDoc('${currentSolId}','${doc.id}')">🗑</button>
+
+        <div
+          style="
+            font-size:13px;
+            color:var(--text-1);
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            margin-top:3px;
+          "
+        >
+          ${doc.nombre_archivo}
         </div>
-      </div>`).join('');
+
+        <div
+          style="
+            font-size:11px;
+            color:var(--text-3);
+            margin-top:3px;
+          "
+        >
+          ${tamanioKb.toFixed(0)} KB
+          · ${fmtDate(doc.created_at)}
+          · ${doc.origen || 'BACKOFFICE'}
+        </div>
+
+        ${
+          doc.observaciones
+            ? `
+              <div
+                style="
+                  margin-top:8px;
+                  padding:8px 10px;
+                  border-radius:8px;
+                  color:var(--red);
+                  background:rgba(248,81,73,.08);
+                  font-size:11px;
+                "
+              >
+                Observación:
+                ${doc.observaciones}
+              </div>
+            `
+            : ''
+        }
+      </div>
+
+      <div
+        style="
+          display:flex;
+          flex-direction:column;
+          gap:7px;
+          flex-shrink:0;
+          align-items:flex-end;
+        "
+      >
+        <span
+          style="
+            padding:4px 9px;
+            border-radius:20px;
+            font-size:10px;
+            font-weight:700;
+            color:${estadoVisual.color};
+            background:${estadoVisual.fondo};
+          "
+        >
+          ${estadoVisual.texto}
+        </span>
+
+        <button
+          class="btn-sm ghost"
+          style="
+            font-size:11px;
+            padding:4px 10px;
+          "
+          onclick="verDocumento(
+            '${solicitudId}',
+            '${doc.id}',
+            '${doc.mime_type}'
+          )"
+        >
+          👁 Ver
+        </button>
+
+        ${
+          estado !== 'APROBADO'
+            ? `
+              <button
+                class="btn-sm primary"
+                style="
+                  font-size:11px;
+                  padding:4px 10px;
+                "
+                onclick="aprobarDocumento(
+                  '${solicitudId}',
+                  '${doc.id}',
+                  '${nombreTipo}'
+                )"
+              >
+                ✓ Aprobar
+              </button>
+            `
+            : ''
+        }
+
+        ${
+          estado !== 'RECHAZADO'
+            ? `
+              <button
+                class="btn-sm ghost"
+                style="
+                  font-size:11px;
+                  padding:4px 10px;
+                  color:var(--red);
+                "
+                onclick="rechazarDocumento(
+                  '${solicitudId}',
+                  '${doc.id}',
+                  '${nombreTipo}'
+                )"
+              >
+                ✕ Rechazar
+              </button>
+            `
+            : ''
+        }
+
+        ${
+          !esFirmado
+            ? `
+              <button
+                class="btn-sm ghost"
+                style="
+                  font-size:11px;
+                  padding:4px 10px;
+                  color:var(--red);
+                "
+                onclick="eliminarDoc(
+                  '${solicitudId}',
+                  '${doc.id}'
+                )"
+              >
+                🗑
+              </button>
+            `
+            : ''
+        }
+      </div>
+    </div>
+  `;
+}).join('');
+
+
 
   } catch (err) {
     container.innerHTML = `<div class="empty-state">
@@ -3291,16 +4148,99 @@ async function verDocumento(solicitudId, docId, mimeType) {
   } catch (err) { toast(`Error: ${err.message}`, 'error'); }
 }
 
-async function verificarDoc(solicitudId, docId, verificado) {
+
+
+
+async function aprobarDocumento(
+  solicitudId,
+  docId,
+  nombreDocumento
+) {
+  const confirmado = confirm(
+    `¿Aprobar "${nombreDocumento}"?`
+  );
+
+  if (!confirmado) {
+    return;
+  }
+
   try {
-    await apiFetch(`/expediente/${solicitudId}/${docId}/verificar`, {
-      method: 'PATCH',
-      body:   JSON.stringify({ verificado }),
-    });
-    toast(verificado ? '✅ Documento verificado' : 'Verificación removida', 'success');
-    loadExpediente(solicitudId);
-  } catch (err) { toast(`Error: ${err.message}`, 'error'); }
+    const respuesta = await apiFetch(
+      `/expediente/${solicitudId}/${docId}/verificar`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          estado: 'APROBADO',
+          observaciones: null,
+        }),
+      }
+    );
+
+    toast(
+      respuesta.message ||
+      '✅ Documento aprobado',
+      'success'
+    );
+
+    await loadExpediente(solicitudId);
+  } catch (err) {
+    toast(
+      `Error: ${err.message}`,
+      'error'
+    );
+  }
 }
+
+async function rechazarDocumento(
+  solicitudId,
+  docId,
+  nombreDocumento
+) {
+  const motivo = prompt(
+    `Indica el motivo del rechazo de "${nombreDocumento}":`
+  );
+
+  if (motivo === null) {
+    return;
+  }
+
+  if (!motivo.trim()) {
+    toast(
+      'Debes indicar el motivo del rechazo.',
+      'error'
+    );
+    return;
+  }
+
+  try {
+    const respuesta = await apiFetch(
+      `/expediente/${solicitudId}/${docId}/verificar`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          estado: 'RECHAZADO',
+          observaciones: motivo.trim(),
+        }),
+      }
+    );
+
+    toast(
+      respuesta.message ||
+      'Documento rechazado',
+      'success'
+    );
+
+    await loadExpediente(solicitudId);
+  } catch (err) {
+    toast(
+      `Error: ${err.message}`,
+      'error'
+    );
+  }
+}
+
+
+
 
 async function eliminarDoc(solicitudId, docId) {
   if (!confirm('¿Eliminar este documento? Esta acción no se puede deshacer.')) return;
@@ -3344,6 +4284,706 @@ window.addEventListener('load', () => {
     initApp();
   }
 });
+
+function escapeHtml(valor) {
+  return String(valor ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+let reporteActual = 'creditos-activos';
+let datosReporteActual = [];
+
+const configuracionReportes = {
+  'creditos-activos': {
+    titulo: 'Reporte de créditos activos',
+    columnas: [
+      ['folio', 'Folio'],
+      ['solicitante', 'Solicitante'],
+      ['empresa', 'Empresa'],
+      ['fecha_desembolso', 'Desembolso'],
+      ['monto_aprobado', 'Monto aprobado', 'moneda'],
+      ['pago_mensual_total', 'Pago mensual', 'moneda'],
+      ['saldo_insoluto', 'Saldo insoluto', 'moneda'],
+      ['proximo_vencimiento', 'Próximo vencimiento'],
+      ['pagos_pendientes', 'Pagos pendientes'],
+      ['pagos_vencidos', 'Pagos vencidos'],
+      ['estado', 'Estado']
+    ]
+  },
+
+  'cartera-detalle': {
+    titulo: 'Reporte de cartera a detalle',
+    columnas: [
+      ['folio', 'Folio'],
+      ['solicitante', 'Solicitante'],
+      ['empresa', 'Empresa'],
+      ['periodo', 'Periodo'],
+      ['fecha_vencimiento', 'Vencimiento'],
+      ['capital', 'Capital', 'moneda'],
+      ['interes', 'Interés', 'moneda'],
+      ['iva', 'IVA', 'moneda'],
+      ['cuota_administracion', 'Administración', 'moneda'],
+      ['seguro', 'Seguro', 'moneda'],
+      ['pago_total', 'Pago total', 'moneda'],
+      ['monto_pagado', 'Pagado', 'moneda'],
+      ['saldo_insoluto', 'Saldo', 'moneda'],
+      ['estado_parcialidad', 'Situación'],
+      ['dias_vencidos', 'Días vencidos']
+    ]
+  },
+
+  vencimientos: {
+    titulo: 'Reporte de vencimientos',
+    columnas: [
+      ['folio', 'Folio'],
+      ['solicitante', 'Solicitante'],
+      ['empresa', 'Empresa'],
+      ['periodo', 'Periodo'],
+      ['fecha_vencimiento', 'Vencimiento'],
+      ['capital', 'Capital', 'moneda'],
+      ['interes', 'Interés', 'moneda'],
+      ['iva', 'IVA', 'moneda'],
+      ['pago_total', 'Total', 'moneda'],
+      ['monto_pagado', 'Pagado', 'moneda'],
+      ['situacion', 'Situación'],
+      ['dias_vencidos', 'Días vencidos']
+    ]
+  },
+
+  'ingresos-cobrados': {
+    titulo: 'Reporte de ingresos cobrados',
+    columnas: [
+      ['fecha_cobro', 'Fecha de cobro'],
+      ['folio', 'Folio'],
+      ['solicitante', 'Solicitante'],
+      ['empresa', 'Empresa'],
+      ['periodo', 'Periodo'],
+      ['capital_programado', 'Capital', 'moneda'],
+      ['interes_programado', 'Interés', 'moneda'],
+      ['iva_programado', 'IVA', 'moneda'],
+      ['cuota_administracion', 'Administración', 'moneda'],
+      ['seguro', 'Seguro', 'moneda'],
+      ['total_programado', 'Programado', 'moneda'],
+      ['total_cobrado', 'Total cobrado', 'moneda']
+    ]
+  }
+};
+
+function seleccionarReporte(tipo, boton) {
+  reporteActual = tipo;
+
+  document
+    .querySelectorAll('#section-reportes .btn-secondary')
+    .forEach(elemento => elemento.classList.remove('active'));
+
+  if (boton) {
+    boton.classList.add('active');
+  }
+
+  const contenedorSituacion =
+    document.getElementById('contenedorSituacionReporte');
+
+  if (contenedorSituacion) {
+    contenedorSituacion.style.display =
+      tipo === 'vencimientos' ? 'block' : 'none';
+  }
+
+  document.getElementById('reporteTitulo').textContent =
+    configuracionReportes[tipo].titulo;
+
+  consultarReporte();
+}
+
+function construirParametrosReporte() {
+  const parametros = new URLSearchParams();
+
+  const fechaInicio =
+    document.getElementById('reporteFechaInicio')?.value;
+
+  const fechaFin =
+    document.getElementById('reporteFechaFin')?.value;
+
+  const empresaId =
+    document.getElementById('reporteEmpresa')?.value;
+
+  const situacion =
+    document.getElementById('reporteSituacion')?.value;
+
+  if (fechaInicio) {
+    parametros.set('fechaInicio', fechaInicio);
+  }
+
+  if (fechaFin) {
+    parametros.set('fechaFin', fechaFin);
+  }
+
+  if (empresaId) {
+    parametros.set('empresaId', empresaId);
+  }
+
+  if (reporteActual === 'vencimientos' && situacion) {
+    parametros.set('situacion', situacion);
+  }
+
+  return parametros.toString();
+}
+
+async function consultarReporte() {
+  const cuerpo = document.getElementById('reporteCuerpo');
+
+  cuerpo.innerHTML = `
+    <tr>
+      <td colspan="20" style="padding:35px;text-align:center;">
+        Consultando información...
+      </td>
+    </tr>
+  `;
+
+  try {
+    const parametros = construirParametrosReporte();
+
+    const ruta = `/reportes/${reporteActual}${
+      parametros ? `?${parametros}` : ''
+    }`;
+
+    const respuesta = await apiFetch(ruta);
+
+    datosReporteActual = respuesta.data || [];
+
+    renderizarResumenReporte(respuesta.resumen || {});
+    renderizarTablaReporte();
+  } catch (error) {
+    console.error('Error al consultar reporte:', error);
+
+    datosReporteActual = [];
+
+    cuerpo.innerHTML = `
+      <tr>
+        <td colspan="20" style="padding:35px;text-align:center;color:#ef4444;">
+          ${escapeHtml(
+            error.message || 'No fue posible consultar el reporte'
+          )}
+        </td>
+      </tr>
+    `;
+  }
+}
+
+function renderizarTablaReporte() {
+  const configuracion = configuracionReportes[reporteActual];
+
+  const encabezado = document.getElementById('reporteEncabezado');
+  const cuerpo = document.getElementById('reporteCuerpo');
+
+  encabezado.innerHTML = `
+    <tr>
+      ${configuracion.columnas
+        .map(columna => `<th>${escapeHtml(columna[1])}</th>`)
+        .join('')}
+    </tr>
+  `;
+
+  if (!datosReporteActual.length) {
+    cuerpo.innerHTML = `
+      <tr>
+        <td
+          colspan="${configuracion.columnas.length}"
+          style="padding:35px;text-align:center;color:var(--text-2);"
+        >
+          No hay información para los filtros seleccionados
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  cuerpo.innerHTML = datosReporteActual.map(fila => `
+    <tr>
+      ${configuracion.columnas.map(columna => {
+        const [campo, , formato] = columna;
+        return `<td>${formatearDatoReporte(fila[campo], formato)}</td>`;
+      }).join('')}
+    </tr>
+  `).join('');
+}
+
+function formatearDatoReporte(valor, formato) {
+  if (valor === null || valor === undefined || valor === '') {
+    return '-';
+  }
+
+  if (formato === 'moneda') {
+    return Number(valor).toLocaleString('es-MX', {
+      style: 'currency',
+      currency: 'MXN'
+    });
+  }
+
+  if (
+    typeof valor === 'string' &&
+    /^\d{4}-\d{2}-\d{2}/.test(valor)
+  ) {
+    const fecha = valor.substring(0, 10).split('-');
+    return `${fecha[2]}/${fecha[1]}/${fecha[0]}`;
+  }
+
+  if (typeof valor === 'boolean') {
+    return valor ? 'Sí' : 'No';
+  }
+
+  return escapeHtml(String(valor));
+}
+
+function renderizarResumenReporte(resumen) {
+  const contenedor = document.getElementById('reporteResumen');
+
+  const etiquetas = {
+    creditos: 'Créditos',
+    montoAprobado: 'Monto aprobado',
+    saldoInsoluto: 'Saldo insoluto',
+    totalCobrado: 'Total cobrado',
+    pagosVencidos: 'Pagos vencidos',
+    parcialidades: 'Parcialidades',
+    capital: 'Capital',
+    interes: 'Interés',
+    iva: 'IVA',
+    pagoTotal: 'Pago total',
+    montoPagado: 'Monto pagado',
+    saldoVencido: 'Saldo vencido',
+    totalPeriodo: 'Total del periodo',
+    totalVencido: 'Total vencido',
+    venceHoy: 'Vence hoy',
+    porVencer: 'Por vencer',
+    pagado: 'Pagado',
+    vencidos: 'Vencimientos atrasados',
+    cobros: 'Cobros',
+    capitalProgramado: 'Capital programado',
+    interesProgramado: 'Interés programado',
+    ivaProgramado: 'IVA programado',
+    cuotaAdministracion: 'Administración',
+    seguro: 'Seguro'
+  };
+
+  const camposMoneda = new Set([
+    'montoAprobado',
+    'saldoInsoluto',
+    'totalCobrado',
+    'capital',
+    'interes',
+    'iva',
+    'pagoTotal',
+    'montoPagado',
+    'saldoVencido',
+    'totalPeriodo',
+    'totalVencido',
+    'venceHoy',
+    'porVencer',
+    'pagado',
+    'capitalProgramado',
+    'interesProgramado',
+    'ivaProgramado',
+    'cuotaAdministracion',
+    'seguro'
+  ]);
+
+  contenedor.innerHTML = Object.entries(resumen)
+    .map(([campo, valor]) => {
+      const valorPresentado = camposMoneda.has(campo)
+        ? Number(valor || 0).toLocaleString('es-MX', {
+            style: 'currency',
+            currency: 'MXN'
+          })
+        : Number(valor || 0).toLocaleString('es-MX');
+
+      return `
+        <div class="card" style="padding:16px;">
+          <div style="font-size:11px;color:var(--text-2);">
+            ${escapeHtml(etiquetas[campo] || campo)}
+          </div>
+          <div style="font-size:20px;font-weight:700;margin-top:5px;">
+            ${valorPresentado}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+}
+
+function exportarReporteCSV() {
+  if (!datosReporteActual.length) {
+    toast('No hay información para exportar', 'error');
+    return;
+  }
+
+  const configuracion = configuracionReportes[reporteActual];
+
+  const escaparCSV = valor => {
+    if (valor === null || valor === undefined) {
+      return '';
+    }
+
+    const texto = String(valor).replace(/"/g, '""');
+    return `"${texto}"`;
+  };
+
+  const lineas = [
+    configuracion.columnas
+      .map(columna => escaparCSV(columna[1]))
+      .join(',')
+  ];
+
+  for (const fila of datosReporteActual) {
+    lineas.push(
+      configuracion.columnas
+        .map(columna => escaparCSV(fila[columna[0]]))
+        .join(',')
+    );
+  }
+
+  const contenido = '\uFEFF' + lineas.join('\r\n');
+  const blob = new Blob([contenido], {
+    type: 'text/csv;charset=utf-8;'
+  });
+
+  const enlace = document.createElement('a');
+  enlace.href = URL.createObjectURL(blob);
+  enlace.download =
+    `${reporteActual}-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+
+  URL.revokeObjectURL(enlace.href);
+}
+
+
+let pagoCreditoActual = null;
+
+function fechaActualPago() {
+  const hoy = new Date();
+
+  const anio = hoy.getFullYear();
+  const mes = String(
+    hoy.getMonth() + 1
+  ).padStart(2, '0');
+
+  const dia = String(
+    hoy.getDate()
+  ).padStart(2, '0');
+
+  return `${anio}-${mes}-${dia}`;
+}
+
+function montoMXN(valor) {
+  return Number(valor || 0).toLocaleString(
+    'es-MX',
+    {
+      style: 'currency',
+      currency: 'MXN'
+    }
+  );
+}
+
+async function abrirModalPago(creditoId) {
+  const modal = $('modalAplicarPago');
+  const boton = $('btnConfirmarPago');
+  const error = $('pagoError');
+
+  if (!modal) {
+    console.error(
+      'No se encontró modalAplicarPago'
+    );
+    return;
+  }
+
+  modal.style.display = 'flex';
+
+  boton.disabled = true;
+  boton.textContent = 'Cargando...';
+
+  error.style.display = 'none';
+  error.textContent = '';
+
+  $('pagoCreditoId').value = creditoId;
+  $('pagoTipo').value = 'MANUAL';
+  $('pagoFecha').value = fechaActualPago();
+  $('pagoMonto').value = '';
+  $('pagoReferencia').value = '';
+  $('pagoObservaciones').value = '';
+
+  $('pagoModalFolio').textContent =
+    'Consultando crédito...';
+
+  $('pagoAcreditado').textContent = '-';
+  $('pagoEmpresa').textContent = '-';
+  $('pagoSaldoInsoluto').textContent = '$0.00';
+  $('pagoSaldoCalendario').textContent = '$0.00';
+  $('pagoParcialidades').textContent = '0';
+  $('pagoProximoVencimiento').textContent = '-';
+
+  cambiarTipoPago();
+
+  try {
+    const respuesta = await apiFetch(
+      `/pagos/credito/${creditoId}/saldo`
+    );
+
+    const credito = respuesta.credito;
+
+    pagoCreditoActual = credito;
+
+    $('pagoModalFolio').textContent =
+      `${credito.folio} · ${credito.estado}`;
+
+    $('pagoAcreditado').textContent =
+      credito.acreditado || '-';
+
+    $('pagoEmpresa').textContent =
+      credito.empresa || '-';
+
+    $('pagoSaldoInsoluto').textContent =
+      montoMXN(credito.saldo_insoluto);
+
+    $('pagoSaldoCalendario').textContent =
+      montoMXN(credito.saldo_calendario);
+
+    $('pagoParcialidades').textContent =
+      credito.parcialidades_pendientes || 0;
+
+    $('pagoProximoVencimiento').textContent =
+      credito.proximo_vencimiento
+        ? fmtDate(credito.proximo_vencimiento)
+        : '-';
+
+    boton.disabled = false;
+    boton.textContent = 'Aplicar pago';
+  } catch (err) {
+    console.error(
+      'Error al consultar saldo:',
+      err
+    );
+
+    error.textContent =
+      err.message ||
+      'No fue posible consultar el crédito';
+
+    error.style.display = 'block';
+
+    boton.disabled = true;
+    boton.textContent = 'Aplicar pago';
+  }
+}
+
+function cerrarModalPago() {
+  const modal = $('modalAplicarPago');
+
+  if (modal) {
+    modal.style.display = 'none';
+  }
+
+  pagoCreditoActual = null;
+}
+
+function cambiarTipoPago() {
+  const tipo = $('pagoTipo')?.value;
+  const aviso = $('pagoAvisoLiquidacion');
+  const campoMonto = $('pagoMonto');
+
+  if (!aviso || !campoMonto) {
+    return;
+  }
+
+  const esLiquidacion =
+    tipo === 'LIQUIDACION';
+
+  aviso.style.display =
+    esLiquidacion ? 'block' : 'none';
+
+  /*
+   * Precarga el saldo del calendario.
+   * El usuario todavía puede modificar el importe.
+   */
+  if (
+    esLiquidacion &&
+    pagoCreditoActual
+  ) {
+    campoMonto.value = Number(
+      pagoCreditoActual.saldo_calendario || 0
+    ).toFixed(2);
+  }
+}
+
+async function aplicarPagoManual() {
+  const boton = $('btnConfirmarPago');
+  const error = $('pagoError');
+
+  const creditoId =
+    $('pagoCreditoId')?.value;
+
+  const tipoPago =
+    $('pagoTipo')?.value;
+
+  const fechaPago =
+    $('pagoFecha')?.value;
+
+  const monto = Number(
+    $('pagoMonto')?.value
+  );
+
+  const referencia =
+    $('pagoReferencia')?.value.trim();
+
+  const observaciones =
+    $('pagoObservaciones')?.value.trim();
+
+  error.style.display = 'none';
+  error.textContent = '';
+
+  if (!creditoId) {
+    error.textContent =
+      'No se identificó el crédito';
+
+    error.style.display = 'block';
+    return;
+  }
+
+  if (!fechaPago) {
+    error.textContent =
+      'Captura la fecha del pago';
+
+    error.style.display = 'block';
+    return;
+  }
+
+  if (
+    !Number.isFinite(monto) ||
+    monto <= 0
+  ) {
+    error.textContent =
+      'Captura un importe mayor a cero';
+
+    error.style.display = 'block';
+    return;
+  }
+
+  if (tipoPago === 'LIQUIDACION') {
+    const confirmado = window.confirm(
+      `Se aplicará una liquidación por ` +
+      `${montoMXN(monto)} al crédito ` +
+      `${pagoCreditoActual?.folio || ''}. ` +
+      `¿Deseas continuar?`
+    );
+
+    if (!confirmado) {
+      return;
+    }
+  }
+
+  boton.disabled = true;
+  boton.textContent = 'Aplicando...';
+
+  try {
+    const respuesta = await apiFetch(
+      '/pagos/aplicar',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          credito_id: creditoId,
+          tipo_pago: tipoPago,
+          fecha_pago: fechaPago,
+          monto,
+          referencia:
+            referencia || null,
+          observaciones:
+            observaciones || null
+        })
+      }
+    );
+
+    cerrarModalPago();
+
+    toast(
+      respuesta.credito_pagado
+        ? 'Pago aplicado. El crédito quedó liquidado.'
+        : `Pago aplicado correctamente. ` +
+          `Saldo: ${montoMXN(
+            respuesta.saldo_insoluto
+          )}`,
+      'success'
+    );
+
+    /*
+     * Actualizar las pantallas existentes.
+     */
+    if (
+      typeof loadCartera === 'function'
+    ) {
+      loadCartera();
+    }
+
+    if (
+      typeof loadCreditos === 'function'
+    ) {
+      loadCreditos();
+    }
+
+    if (
+      typeof loadDashboard === 'function'
+    ) {
+      loadDashboard();
+    }
+  } catch (err) {
+    console.error(
+      'Error al aplicar pago:',
+      err
+    );
+
+    error.textContent =
+      err.message ||
+      'No fue posible aplicar el pago';
+
+    error.style.display = 'block';
+  } finally {
+    boton.disabled = false;
+    boton.textContent = 'Aplicar pago';
+  }
+}
+
+/*
+ * Cerrar al hacer clic fuera de la tarjeta.
+ */
+document.addEventListener(
+  'click',
+  event => {
+    const modal = $('modalAplicarPago');
+
+    if (
+      modal &&
+      event.target === modal
+    ) {
+      cerrarModalPago();
+    }
+  }
+);
+
+/*
+ * Cerrar con Escape.
+ */
+document.addEventListener(
+  'keydown',
+  event => {
+    if (event.key === 'Escape') {
+      cerrarModalPago();
+    }
+  }
+);
+
+
 </script>
 </body>
 </html>

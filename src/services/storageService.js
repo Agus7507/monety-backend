@@ -51,16 +51,29 @@ const BUCKET = () => process.env.R2_BUCKET || 'monety-docs';
 
 // ── Tipos de documento permitidos ────────────────────────────
 const TIPOS_VALIDOS = new Set([
-  'INE_FRENTE', 'INE_REVERSO', 'CURP', 'RFC',
-  'COMPROBANTE_DOMICILIO', 'COMPROBANTE_INGRESOS',
-  'RECIBO_NOMINA', 'ESTADO_CUENTA', 'CONTRATO_LABORAL',
-  'CONTRATO_CREDITO', 'OTRO',
+  'INE_FRENTE',
+  'INE_REVERSO',
+  'CURP',
+  'RFC',
+  'COMPROBANTE_DOMICILIO',
+  'COMPROBANTE_INGRESOS',
+  'RECIBO_NOMINA',
+  'ESTADO_CUENTA',
+  'CONSTANCIA_SAT',
+  'CONTRATO_LABORAL',
+  'CONTRATO_CREDITO',
+  'CARTA_APROBACION_FIRMADA',
+  'CONTRATO_CREDITO_FIRMADO',
+  'OTRO',
 ]);
+
+
 
 const MIME_PERMITIDOS = new Set([
   'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
   'application/pdf',
 ]);
+
 
 const MAX_BYTES = parseInt(process.env.UPLOAD_MAX_MB || '10') * 1024 * 1024;
 
@@ -94,7 +107,21 @@ async function upload({ buffer, mimeType, originalName, solicitudId, tipo }) {
   if (buffer.length > MAX_BYTES)
     throw new Error(`El archivo supera el límite de ${process.env.UPLOAD_MAX_MB || 10} MB`);
 
-  const ext = path.extname(originalName) || (mimeType === 'application/pdf' ? '.pdf' : '.jpg');
+  
+  const EXTENSIONES_POR_MIME = {
+  'application/pdf': '.pdf',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
+const ext = EXTENSIONES_POR_MIME[mimeType];
+
+if (!ext) {
+  throw new Error('No se pudo determinar la extensión del archivo');
+}
+
   const key = `solicitudes/${solicitudId}/${tipo}_${uuidv4()}${ext}`;
 
   await getClient().send(new PutObjectCommand({

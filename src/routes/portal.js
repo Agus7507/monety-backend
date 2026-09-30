@@ -19,6 +19,10 @@
 const router   = require('express').Router();
 const bcrypt   = require('bcryptjs');
 const jwt      = require('jsonwebtoken');
+
+const multer = require('multer');
+const storage = require('../services/storageService');
+
 const { body, param } = require('express-validator');
 const { handleValidationErrors } = require('../middleware/errorHandler');
 const { query: db, pool } = require('../config/db');
@@ -56,6 +60,61 @@ function fmtMXN(n) {
     style: 'currency', currency: 'MXN', minimumFractionDigits: 2
   });
 }
+
+
+const uploadPortal = multer({
+  storage: multer.memoryStorage(),
+
+  limits: {
+    fileSize:
+      parseInt(process.env.UPLOAD_MAX_MB || '10', 10) *
+      1024 *
+      1024,
+    files: 1,
+  },
+
+  fileFilter: (_req, file, callback) => {
+    if (storage.MIME_PERMITIDOS.has(file.mimetype)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(
+      new Error(
+        'Formato no permitido. Solo JPG, PNG, WEBP o PDF.'
+      )
+    );
+  },
+});
+
+function detectarMimeReal(buffer) {
+  if (!buffer || buffer.length < 4) {
+    return null;
+  }
+
+  if (
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8
+  ) {
+    return 'image/jpeg';
+  }
+
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50
+  ) {
+    return 'image/png';
+  }
+
+  if (
+    buffer.slice(0, 4).toString() === '%PDF'
+  ) {
+    return 'application/pdf';
+  }
+
+  return null;
+}
+
 
 // ════════════════════════════════════════════════════════════════
 // POST /api/v1/portal/registro
@@ -100,7 +159,7 @@ router.post('/registro',
       const hash = await bcrypt.hash(password, 12);
       await db(
         `UPDATE solicitantes
-         SET portal_password_hash = $1, portal_activo = 1, updated_at = SYSDATETIMEOFFSET()
+         SET portal_password_hash = $1, portal_activo = TRUE, updated_at = CURRENT_TIMESTAMP
          WHERE id = $2`,
         [hash, sol.id]
       );
@@ -208,7 +267,7 @@ router.get('/solicitudes', portalAuth, async (req, res, next) => {
          s.tipo_credito, s.tipo_nomina,
          s.monto_solicitado, s.plazo_meses,
          s.salario_mensual_neto,
-         ISNULL(e.nombre, 'Sin empresa') AS empresa,
+         COALESCE(e.nombre, 'Sin empresa') AS empresa,
          ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
          c.monto_aprobado, c.pago_mensual_total,
          c.tasa_nominal_anual, c.cat_anual,
@@ -238,7 +297,7 @@ router.get('/solicitudes/:folio', portalAuth,
         `SELECT
            s.id, s.folio, s.estado, s.fecha_solicitud,
            s.tipo_credito, s.tipo_nomina, s.monto_solicitado, s.plazo_meses,
-           ISNULL(e.nombre, 'Sin empresa') AS empresa,
+           COALESCE(e.nombre, 'Sin empresa') AS empresa,
            ev.ranking, ev.puntaje_total, ev.resultado, ev.motivo_rechazo,
            ev.puntos_ingreso, ev.puntos_historial, ev.puntos_antiguedad, ev.puntos_capacidad_pago,
            c.id AS credito_id, c.monto_aprobado, c.pago_mensual_total,
@@ -275,6 +334,60 @@ router.get('/solicitudes/:folio', portalAuth,
     } catch (err) { next(err); }
   }
 );
+
+
+// ════════════════════════════════════════════════════════════════
+// GET /api/v1/portal/creditos
+// Lista todos los créditos pertenecientes al solicitante autenticado.
+// ════════════════════════════════════════════════════════════════
+router.get('/creditos', portalAuth, async (req, res, next) => {
+  try {
+    const { rows } = await db(
+      `SELECT
+         c.id,
+         c.solicitud_id,
+         s.folio,
+         c.estado,
+         c.monto_aprobado,
+         c.saldo_insoluto,
+         c.pago_mensual_total,
+         c.plazo_meses,
+         c.numero_parcialidades,
+         c.frecuencia_pago,
+         c.fecha_desembolso,
+         c.fecha_inicio_descuento,
+         c.fecha_vencimiento,
+         s.tipo_credito,
+         s.tipo_nomina,
+         COALESCE(e.nombre, 'Sin empresa') AS empresa
+       FROM creditos c
+       JOIN solicitudes s
+         ON s.id = c.solicitud_id
+       LEFT JOIN empresas e
+         ON e.id = s.empresa_id
+       WHERE s.solicitante_id = $1
+       ORDER BY
+         CASE c.estado::TEXT
+           WHEN 'ACTIVO' THEN 1
+           WHEN 'VENCIDO' THEN 2
+           WHEN 'PAGADO' THEN 3
+           ELSE 4
+         END,
+         c.fecha_desembolso DESC NULLS LAST,
+         c.created_at DESC`,
+      [req.solicitante.id]
+    );
+
+    res.json({
+      ok: true,
+      creditos: rows,
+      total: rows.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+``
 
 // ════════════════════════════════════════════════════════════════
 // GET /api/v1/portal/creditos/:id/amortizacion
@@ -324,7 +437,7 @@ router.post('/cambiar-password', portalAuth,
       if (!valid) return res.status(401).json({ ok: false, message: 'Contraseña actual incorrecta' });
 
       const newHash = await bcrypt.hash(passwordNuevo, 12);
-      await db('UPDATE solicitantes SET portal_password_hash=$1, updated_at=SYSDATETIMEOFFSET() WHERE id=$2',
+      await db('UPDATE solicitantes SET portal_password_hash=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
         [newHash, req.solicitante.id]);
 
       res.json({ ok: true, mensaje: 'Contraseña actualizada exitosamente' });
@@ -378,42 +491,628 @@ router.post('/recuperar-password',
   }
 );
 
+
+router.post(
+  '/documentos/:solicitudId/:tipo',
+  portalAuth,
+  param('solicitudId').isUUID(),
+  param('tipo').isString().trim().notEmpty(),
+  handleValidationErrors,
+  uploadPortal.single('archivo'),
+  async (req, res, next) => {
+    let archivoSubidoKey = null;
+    let client = null;
+
+    try {
+      const solicitudId = req.params.solicitudId;
+      const tipo = req.params.tipo.toUpperCase();
+
+      if (!req.file) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Selecciona un archivo para cargar.',
+        });
+      }
+
+      const mimeReal = detectarMimeReal(req.file.buffer);
+
+      if (!mimeReal) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            'El contenido del archivo no corresponde a un PDF o imagen válida.',
+        });
+      }
+
+      const mimeDeclarado =
+        req.file.mimetype === 'image/jpg'
+          ? 'image/jpeg'
+          : req.file.mimetype;
+
+      if (mimeDeclarado !== mimeReal) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            'El tipo real del archivo no coincide con el formato informado.',
+        });
+      }
+
+      const { rows: solicitudes } = await db(
+        `SELECT
+           s.id,
+           s.folio
+         FROM solicitudes s
+         WHERE s.id = $1
+           AND s.solicitante_id = $2`,
+        [
+          solicitudId,
+          req.solicitante.id,
+        ]
+      );
+
+      if (!solicitudes.length) {
+        return res.status(404).json({
+          ok: false,
+          message:
+            'Solicitud no encontrada o no pertenece al usuario.',
+        });
+      }
+
+
+      const TIPOS_FIRMADOS = new Set([
+  'CARTA_APROBACION_FIRMADA',
+  'CONTRATO_CREDITO_FIRMADO',
+]);
+
+const esDocumentoFirmado =
+  TIPOS_FIRMADOS.has(tipo);
+
+
+      const { rows: requisitos } = await db(
+        `SELECT
+           tipo,
+           nombre,
+           permite_pdf,
+           permite_imagen
+         FROM requisitos_documentales
+         WHERE tipo = $1::tipo_doc_enum
+           AND activo = TRUE`,
+        [tipo]
+      );
+
+
+let requisito = null;
+
+if (!esDocumentoFirmado) {
+  const { rows: requisitos } = await db(
+    `SELECT
+       tipo,
+       nombre,
+       permite_pdf,
+       permite_imagen
+     FROM requisitos_documentales
+     WHERE tipo = $1::tipo_doc_enum
+       AND activo = TRUE`,
+    [tipo]
+  );
+
+  if (!requisitos.length) {
+    return res.status(400).json({
+      ok: false,
+      message:
+        'El tipo de documento no está habilitado para carga.',
+    });
+  }
+
+  requisito = requisitos[0];
+}
+
+
+      const esPdf =
+  mimeReal === 'application/pdf';
+
+const esImagen =
+  mimeReal.startsWith('image/');
+
+if (
+  esDocumentoFirmado &&
+  !esPdf
+) {
+  return res.status(400).json({
+    ok: false,
+    message:
+      'La carta y el contrato firmados deben cargarse en formato PDF.',
+  });
+}
+
+if (
+  !esDocumentoFirmado &&
+  esPdf &&
+  !requisito.permite_pdf
+) {
+  return res.status(400).json({
+    ok: false,
+    message:
+      'Este requisito no permite archivos PDF.',
+  });
+}
+
+if (
+  !esDocumentoFirmado &&
+  esImagen &&
+  !requisito.permite_imagen
+) {
+  return res.status(400).json({
+    ok: false,
+    message:
+      'Este requisito solo permite archivos PDF.',
+  });
+}
+
+      if (esImagen && !requisito.permite_imagen) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            'Este requisito solo permite archivos PDF.',
+        });
+      }
+
+      const resultadoStorage = await storage.upload({
+        buffer: req.file.buffer,
+        mimeType: mimeReal,
+        originalName: req.file.originalname,
+        solicitudId,
+        tipo,
+      });
+
+      archivoSubidoKey = resultadoStorage.key;
+
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const { rows: anteriores } = await client.query(
+        `SELECT
+           id
+         FROM documentos
+         WHERE solicitud_id = $1
+           AND tipo = $2::tipo_doc_enum
+           AND activo = TRUE
+         ORDER BY created_at DESC
+         FOR UPDATE`,
+        [
+          solicitudId,
+          tipo,
+        ]
+      );
+
+      const documentoAnteriorId =
+        anteriores.length
+          ? anteriores[0].id
+          : null;
+
+      if (anteriores.length) {
+        await client.query(
+          `UPDATE documentos
+           SET activo = FALSE,
+               estado = 'REEMPLAZADO'
+           WHERE solicitud_id = $1
+             AND tipo = $2::tipo_doc_enum
+             AND activo = TRUE`,
+          [
+            solicitudId,
+            tipo,
+          ]
+        );
+      }
+
+      const { rows: nuevos } = await client.query(
+        `INSERT INTO documentos (
+           solicitud_id,
+           tipo,
+           nombre_archivo,
+           url_storage,
+           tamanio_bytes,
+           mime_type,
+           verificado,
+           estado,
+           origen,
+           documento_anterior_id,
+           activo
+         )
+         VALUES (
+           $1,
+           $2::tipo_doc_enum,
+           $3,
+           $4,
+           $5,
+           $6,
+           FALSE,
+           'EN_REVISION',
+           'PORTAL',
+           $7,
+           TRUE
+         )
+         RETURNING
+           id,
+           solicitud_id,
+           tipo,
+           nombre_archivo,
+           tamanio_bytes,
+           mime_type,
+           verificado,
+           estado,
+           origen,
+           activo,
+           created_at`,
+        [
+          solicitudId,
+          tipo,
+          req.file.originalname,
+          resultadoStorage.url,
+          resultadoStorage.sizeBytes,
+          resultadoStorage.mimeType,
+          documentoAnteriorId,
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      logger.info('Documento cargado desde portal', {
+        solicitanteId: req.solicitante.id,
+        solicitudId,
+        tipo,
+        documentoId: nuevos[0].id,
+        reemplazo: Boolean(documentoAnteriorId),
+      });
+
+      return res.status(201).json({
+        ok: true,
+        message: documentoAnteriorId
+          ? 'Documento reemplazado y enviado a revisión.'
+          : 'Documento cargado y enviado a revisión.',
+        documento: nuevos[0],
+      });
+    } catch (err) {
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          logger.error(
+            'No fue posible revertir la carga documental',
+            {
+              error: rollbackError.message,
+            }
+          );
+        }
+      }
+
+      if (archivoSubidoKey) {
+        try {
+          await storage.remove(archivoSubidoKey);
+        } catch (storageError) {
+          logger.error(
+            'No fue posible eliminar archivo huérfano de R2',
+            {
+              key: archivoSubidoKey,
+              error: storageError.message,
+            }
+          );
+        }
+      }
+
+      next(err);
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  }
+);
+
+
+router.get(
+  '/documentos/archivo/:documentoId',
+  portalAuth,
+  param('documentoId').isUUID(),
+  handleValidationErrors,
+  async (req, res, next) => {
+    try {
+      const documentoId = req.params.documentoId;
+
+      const { rows } = await db(
+        `SELECT
+           d.id,
+           d.nombre_archivo,
+           d.mime_type,
+           d.url_storage
+         FROM documentos d
+         JOIN solicitudes s
+           ON s.id = d.solicitud_id
+         WHERE d.id = $1
+           AND s.solicitante_id = $2`,
+        [
+          documentoId,
+          req.solicitante.id,
+        ]
+      );
+
+      if (!rows.length) {
+        return res.status(404).json({
+          ok: false,
+          message:
+            'Documento no encontrado o no pertenece al usuario.',
+        });
+      }
+
+      const documento = rows[0];
+
+      const key = storage.keyFromRef(
+        documento.url_storage
+      );
+
+      const url = await storage.getPresignedUrl(
+        key,
+        900
+      );
+
+      res.json({
+        ok: true,
+        url,
+        mimeType: documento.mime_type,
+        nombreArchivo: documento.nombre_archivo,
+        expiraEnSegundos: 900,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+
+
+
+router.get(
+  '/creditos/:creditoId/cartas',
+  portalAuth,
+  param('creditoId').isUUID(),
+  handleValidationErrors,
+  async (req, res, next) => {
+    try {
+      const creditoId = req.params.creditoId;
+
+      const { rows: creditos } = await db(
+        `SELECT
+           c.id AS credito_id,
+           c.solicitud_id,
+           c.estado AS estado_credito,
+           s.folio,
+           s.estado AS estado_solicitud
+         FROM creditos c
+         JOIN solicitudes s
+           ON s.id = c.solicitud_id
+         WHERE c.id = $1
+           AND s.solicitante_id = $2`,
+        [
+          creditoId,
+          req.solicitante.id,
+        ]
+      );
+
+      if (!creditos.length) {
+        return res.status(404).json({
+          ok: false,
+          message:
+            'Crédito no encontrado o no pertenece al usuario.',
+        });
+      }
+
+      const credito = creditos[0];
+
+      const { rows: firmados } = await db(
+        `SELECT DISTINCT ON (tipo)
+           id,
+           tipo,
+           nombre_archivo,
+           estado,
+           observaciones,
+           created_at
+         FROM documentos
+         WHERE solicitud_id = $1
+           AND tipo IN (
+             'CARTA_APROBACION_FIRMADA'::tipo_doc_enum,
+             'CONTRATO_CREDITO_FIRMADO'::tipo_doc_enum
+           )
+           AND activo = TRUE
+         ORDER BY tipo, created_at DESC`,
+        [credito.solicitud_id]
+      );
+
+      const buscarFirmado = tipo =>
+        firmados.find(
+          documento => documento.tipo === tipo
+        ) || null;
+
+      res.json({
+        ok: true,
+        credito: {
+          id: credito.credito_id,
+          solicitud_id: credito.solicitud_id,
+          folio: credito.folio,
+          estado: credito.estado_credito,
+        },
+        cartas: [
+          {
+            tipo: 'CARTA_APROBACION',
+            nombre: 'Carta de aprobación',
+            descripcion:
+              'Descarga o imprime la carta, fírmala y vuelve a cargarla.',
+            url_original:
+              `/documentos/${credito.solicitud_id}/carta`,
+            tipo_firmado:
+              'CARTA_APROBACION_FIRMADA',
+            firmado: buscarFirmado(
+              'CARTA_APROBACION_FIRMADA'
+            ),
+          },
+          {
+            tipo: 'CONTRATO_CREDITO',
+            nombre: 'Contrato de crédito',
+            descripcion:
+              'Descarga o imprime el contrato, firma en los espacios indicados y vuelve a cargarlo.',
+            url_original:
+              `/documentos/${credito.solicitud_id}/contrato`,
+            tipo_firmado:
+              'CONTRATO_CREDITO_FIRMADO',
+            firmado: buscarFirmado(
+              'CONTRATO_CREDITO_FIRMADO'
+            ),
+          },
+        ],
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+
 // ════════════════════════════════════════════════════════════════
 // GET /api/v1/portal/documentos/:solicitudId
 // Documentos del expediente del solicitante autenticado
 // ════════════════════════════════════════════════════════════════
-router.get('/documentos/:solicitudId', portalAuth,
+router.get(
+  '/documentos/:solicitudId',
+  portalAuth,
   param('solicitudId').isUUID(),
   handleValidationErrors,
   async (req, res, next) => {
     try {
-      const { solicitudId } = req.params;
+      const solicitudId = req.params.solicitudId;
 
-      // Verificar que la solicitud pertenece al solicitante autenticado
-      const { rows: check } = await db(
-        `SELECT id FROM solicitudes
-         WHERE id = $1 AND solicitante_id = $2`,
-        [solicitudId, req.solicitante.id]
+      const { rows: solicitudes } = await db(
+        `SELECT
+           id,
+           folio
+         FROM solicitudes
+         WHERE id = $1
+           AND solicitante_id = $2`,
+        [
+          solicitudId,
+          req.solicitante.id,
+        ]
       );
-      if (!check.length) {
-        return res.status(404).json({ ok: false, message: 'Solicitud no encontrada' });
+
+      if (!solicitudes.length) {
+        return res.status(404).json({
+          ok: false,
+          message:
+            'Solicitud no encontrada o no pertenece al usuario.',
+        });
       }
 
       const { rows } = await db(
         `SELECT
-           d.id, d.tipo, d.nombre_archivo,
-           d.tamanio_bytes, d.mime_type,
-           d.verificado, d.created_at
-         FROM documentos d
-         WHERE d.solicitud_id = $1
-         ORDER BY d.created_at DESC`,
+           r.tipo,
+           r.nombre,
+           r.descripcion,
+           r.obligatorio,
+           r.permite_pdf,
+           r.permite_imagen,
+           r.orden,
+
+           d.id AS documento_id,
+           d.nombre_archivo,
+           d.tamanio_bytes,
+           d.mime_type,
+           d.verificado,
+           d.estado,
+           d.observaciones,
+           d.origen,
+           d.created_at,
+           d.fecha_verificacion,
+
+           CASE
+             WHEN d.id IS NULL THEN 'FALTANTE'
+             WHEN d.verificado = TRUE THEN 'APROBADO'
+             WHEN d.estado IS NULL THEN 'EN_REVISION'
+             WHEN d.estado = 'CARGADO' THEN 'EN_REVISION'
+             ELSE d.estado
+           END AS estado_portal
+
+         FROM requisitos_documentales r
+
+         LEFT JOIN LATERAL (
+           SELECT
+             doc.id,
+             doc.nombre_archivo,
+             doc.tamanio_bytes,
+             doc.mime_type,
+             doc.verificado,
+             doc.estado,
+             doc.observaciones,
+             doc.origen,
+             doc.created_at,
+             doc.fecha_verificacion
+           FROM documentos doc
+           WHERE doc.solicitud_id = $1
+             AND doc.tipo = r.tipo
+             AND doc.activo = TRUE
+           ORDER BY doc.created_at DESC
+           LIMIT 1
+         ) d ON TRUE
+
+         WHERE r.activo = TRUE
+         ORDER BY
+           r.orden,
+           r.nombre`,
         [solicitudId]
       );
 
-      res.json({ ok: true, documentos: rows });
-    } catch (err) { next(err); }
+      const resumen = rows.reduce(
+        (acumulado, documento) => {
+          acumulado.total += 1;
+
+          if (
+            documento.estado_portal === 'FALTANTE'
+          ) {
+            acumulado.faltantes += 1;
+          } else if (
+            documento.estado_portal === 'APROBADO'
+          ) {
+            acumulado.aprobados += 1;
+          } else if (
+            documento.estado_portal === 'RECHAZADO'
+          ) {
+            acumulado.rechazados += 1;
+          } else {
+            acumulado.en_revision += 1;
+          }
+
+          return acumulado;
+        },
+        {
+          total: 0,
+          faltantes: 0,
+          aprobados: 0,
+          rechazados: 0,
+          en_revision: 0,
+        }
+      );
+
+      res.json({
+        ok: true,
+        solicitud: solicitudes[0],
+        documentos: rows,
+        resumen,
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 );
+
+
+
 
 // ════════════════════════════════════════════════════════════════
 // GET /api/v1/portal/carta-termino/:solicitudId

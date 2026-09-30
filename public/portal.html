@@ -663,6 +663,55 @@
       <div class="page-title">Mi crédito</div>
       <div class="page-sub">Condiciones y tabla de amortización de tu crédito.</div>
 
+	<div
+  id="selectorCreditoContainer"
+  class="card"
+  style="display:none;margin-bottom:20px;"
+>
+  <div class="card-body" style="padding:16px 20px;">
+    <label
+      for="selectorCredito"
+      style="
+        display:block;
+        margin-bottom:8px;
+        color:var(--text-2);
+        font-size:13px;
+        font-weight:700;
+      "
+    >
+      Préstamo que deseas consultar
+    </label>
+
+    <select
+      id="selectorCredito"
+      onchange="cambiarCreditoSeleccionado(this.value)"
+      style="
+        width:100%;
+        max-width:520px;
+        padding:11px 12px;
+        border:1px solid var(--border);
+        border-radius:8px;
+        background:var(--bg-raised);
+        color:var(--text-1);
+        font-family:inherit;
+        font-size:14px;
+      "
+    ></select>
+
+    <div
+      id="selectorCreditoAyuda"
+      style="
+        margin-top:7px;
+        color:var(--text-3);
+        font-size:12px;
+      "
+    >
+      Selecciona el préstamo del que deseas consultar saldo,
+      pagos y documentos.
+    </div>
+  </div>
+</div>
+
       <div id="creditoContent">
         <div class="empty-state">
           <div class="empty-icon">💳</div>
@@ -680,6 +729,45 @@
         <div class="card-header">
           <div><div class="card-title">Expediente digital</div></div>
         </div>
+    
+<div
+  class="card"
+  id="cartasCard"
+  style="margin-top:20px"
+>
+  <div class="card-header">
+    <div>
+      <div class="card-title">
+        Cartas y contrato
+      </div>
+      <div
+        style="
+          color:var(--text-3);
+          font-size:12px;
+          margin-top:4px;
+        "
+      >
+        Descarga, firma y vuelve a cargar los documentos.
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="card-body"
+    id="cartasBody"
+  >
+    <div
+      style="
+        text-align:center;
+        padding:24px;
+      "
+    >
+      <div class="loader"></div>
+    </div>
+  </div>
+</div>
+
+
         <div class="card-body" id="docsBody">
           <div style="text-align:center;padding:24px"><div class="loader"></div></div>
         </div>
@@ -744,8 +832,14 @@
 const API   = window.location.origin + '/api/v1/portal';
 let portalToken   = localStorage.getItem('portal_token');
 let portalUser    = JSON.parse(localStorage.getItem('portal_user') || 'null');
+
 let solicitudData = null;
 let creditoData   = null;
+
+let portalCreditos = [];
+let portalCreditoSeleccionadoId =
+  localStorage.getItem('portal_credito_seleccionado') || null;
+
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
@@ -967,48 +1061,320 @@ function showPage(page) {
   document.getElementById('nav'  + page.charAt(0).toUpperCase() + page.slice(1))?.classList.add('active');
 }
 
+
+function obtenerCreditoPredeterminado(creditos) {
+  if (!creditos.length) return null;
+
+  const guardado = portalCreditoSeleccionadoId
+    ? creditos.find(
+        credito => credito.id === portalCreditoSeleccionadoId
+      )
+    : null;
+
+  if (guardado) return guardado;
+
+  return (
+    creditos.find(credito => credito.estado === 'ACTIVO') ||
+    creditos.find(credito => credito.estado === 'VENCIDO') ||
+    creditos[0]
+  );
+}
+
+function renderSelectorCreditos() {
+  const container =
+    document.getElementById('selectorCreditoContainer');
+
+  const select =
+    document.getElementById('selectorCredito');
+
+  if (!container || !select) return;
+
+  if (!portalCreditos.length) {
+    container.style.display = 'none';
+    select.innerHTML = '';
+    return;
+  }
+
+  /*
+   * Se muestra el selector únicamente cuando el usuario tiene
+   * más de un préstamo.
+   */
+  container.style.display =
+    portalCreditos.length > 1 ? 'block' : 'none';
+
+  select.innerHTML = portalCreditos.map(credito => {
+    const seleccionado =
+      credito.id === portalCreditoSeleccionadoId
+        ? 'selected'
+        : '';
+
+    const saldo = Number(
+      credito.saldo_insoluto || 0
+    ).toLocaleString('es-MX', {
+      style: 'currency',
+      currency: 'MXN',
+      minimumFractionDigits: 2,
+    });
+
+    const estado = credito.estado || 'SIN ESTADO';
+    const folio = credito.folio || 'Sin folio';
+
+    return `
+      <option value="${credito.id}" ${seleccionado}>
+        ${folio} · ${estado} · Saldo ${saldo}
+      </option>
+    `;
+  }).join('');
+}
+
+async function cargarCreditoSeleccionado() {
+  if (!creditoData) {
+    renderCreditoNoDisponible();
+    return;
+  }
+
+  const creditoContent =
+    document.getElementById('creditoContent');
+
+  if (creditoContent) {
+    creditoContent.innerHTML = `
+      <div class="empty-state">
+        <div class="loader"></div>
+        <div style="margin-top:12px">
+          Cargando información del préstamo...
+        </div>
+      </div>
+    `;
+  }
+
+  try {
+    /*
+     * Obtenemos el detalle completo de la solicitud relacionada
+     * con el crédito seleccionado.
+     */
+    const detalle = await portalFetch(
+      `/solicitudes/${creditoData.folio}`
+    );
+
+    solicitudData = {
+      ...detalle.solicitud,
+      credito_id: creditoData.id,
+      solicitud_id: creditoData.solicitud_id,
+      folio: creditoData.folio,
+      estado_credito: creditoData.estado,
+      monto_aprobado: creditoData.monto_aprobado,
+      saldo_insoluto: creditoData.saldo_insoluto,
+      pago_mensual_total: creditoData.pago_mensual_total,
+      plazo_meses: creditoData.plazo_meses,
+      numero_parcialidades: creditoData.numero_parcialidades,
+      frecuencia_pago: creditoData.frecuencia_pago,
+      fecha_desembolso: creditoData.fecha_desembolso,
+      fecha_inicio_descuento:
+        creditoData.fecha_inicio_descuento,
+      fecha_vencimiento: creditoData.fecha_vencimiento,
+    };
+
+    renderCredito(solicitudData);
+
+
+await Promise.all([
+  loadAmortizacion(creditoData.id),
+  loadDocs(creditoData.solicitud_id),
+  loadCartasCredito(creditoData.id),
+]);
+
+
+  } catch (err) {
+    console.error(
+      'Error al cargar el crédito seleccionado:',
+      err
+    );
+
+    renderCreditoNoDisponible(
+      'No fue posible cargar la información del préstamo.'
+    );
+
+    toast(`Error: ${err.message}`, 'error');
+  }
+}
+
+async function cambiarCreditoSeleccionado(creditoId) {
+  const credito = portalCreditos.find(
+    elemento => elemento.id === creditoId
+  );
+
+  if (!credito) {
+    toast('El préstamo seleccionado no está disponible', 'error');
+    return;
+  }
+
+  portalCreditoSeleccionadoId = credito.id;
+  creditoData = credito;
+
+  localStorage.setItem(
+    'portal_credito_seleccionado',
+    credito.id
+  );
+
+  renderSelectorCreditos();
+
+  await cargarCreditoSeleccionado();
+}
+
+function renderCreditoNoDisponible(
+  mensaje = 'Cuando tu solicitud sea aprobada, aquí verás los detalles de tu crédito.'
+) {
+  const content = document.getElementById('creditoContent');
+
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">💳</div>
+      <div>${mensaje}</div>
+    </div>
+  `;
+
+  const body = document.getElementById('docsBody');
+
+  if (body) {
+    body.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <div>
+          No hay un préstamo seleccionado para consultar documentos.
+        </div>
+      </div>
+    `;
+  }
+}
+
+
 /* ══════════════════════════════════════════════════════════
    LOAD DATA
 ══════════════════════════════════════════════════════════ */
 async function loadAllData() {
   try {
-    const d = await portalFetch('/solicitudes');
-    const sols = d.solicitudes || [];
-    if (!sols.length) {
+    /*
+     * Cargar solicitudes para las secciones
+     * Inicio y Mi solicitud.
+     */
+    const respuestaSolicitudes = await portalFetch('/solicitudes');
+    const solicitudes = respuestaSolicitudes.solicitudes || [];
+
+    if (!solicitudes.length) {
       renderNoSolicitud();
+      await loadPerfil();
       return;
     }
-    // Tomar la solicitud más reciente
-    const sol = sols[0];
-    solicitudData = sol;
 
-    // Cargar detalle completo por folio
+    const solicitudReciente = solicitudes[0];
+
+    /*
+     * Inicio y Mi solicitud muestran la solicitud más reciente.
+     */
     try {
-      const det = await portalFetch(`/solicitudes/${sol.folio}`);
-      solicitudData = { ...sol, ...det.solicitud };
-      renderHome(det);
-      renderSolicitud(det);
-      if (det.solicitud?.credito_id) {
-        renderCredito(det.solicitud);
-        loadAmortizacion(det.solicitud.credito_id);
-      }
-      // Cargar documentos usando el UUID de la solicitud
-      if (det.solicitud?.id) {
-        loadDocs(det.solicitud.id);
-      }
-    } catch (e) {
-      renderHome({ solicitud: sol, historial: [], documentos: [] });
-      renderSolicitud({ solicitud: sol, historial: [], documentos: [] });
+      const detalleReciente = await portalFetch(
+        `/solicitudes/${solicitudReciente.folio}`
+      );
+
+      renderHome(detalleReciente);
+      renderSolicitud(detalleReciente);
+    } catch (errorDetalle) {
+      console.error(
+        'Error al cargar la solicitud más reciente:',
+        errorDetalle
+      );
+
+      const detalleBasico = {
+        solicitud: solicitudReciente,
+        historial: [],
+        documentos: [],
+      };
+
+      renderHome(detalleBasico);
+      renderSolicitud(detalleBasico);
     }
-    loadPerfil();
+
+    /*
+     * Cargar todos los créditos del usuario.
+     */
+    const respuestaCreditos = await portalFetch('/creditos');
+    portalCreditos = respuestaCreditos.creditos || [];
+
+    /*
+     * Si todavía no tiene créditos, conservar como contexto
+     * la solicitud más reciente.
+     */
+    if (!portalCreditos.length) {
+      creditoData = null;
+      solicitudData = solicitudReciente;
+      portalCreditoSeleccionadoId = null;
+
+      localStorage.removeItem('portal_credito_seleccionado');
+
+      renderSelectorCreditos();
+      renderCreditoNoDisponible();
+
+      if (solicitudReciente.id) {
+        await loadDocs(solicitudReciente.id);
+      }
+
+      await loadPerfil();
+      return;
+    }
+
+    /*
+     * Seleccionar el crédito guardado, el crédito activo
+     * o el primer crédito disponible.
+     */
+    const creditoPredeterminado =
+      obtenerCreditoPredeterminado(portalCreditos);
+
+    if (!creditoPredeterminado) {
+      creditoData = null;
+      solicitudData = solicitudReciente;
+
+      renderSelectorCreditos();
+      renderCreditoNoDisponible(
+        'No fue posible seleccionar un préstamo para consultar.'
+      );
+
+      await loadPerfil();
+      return;
+    }
+
+    creditoData = creditoPredeterminado;
+    portalCreditoSeleccionadoId = creditoPredeterminado.id;
+
+    localStorage.setItem(
+      'portal_credito_seleccionado',
+      creditoPredeterminado.id
+    );
+
+    /*
+     * Mostrar el selector y cargar el crédito seleccionado.
+     */
+    renderSelectorCreditos();
+    await cargarCreditoSeleccionado();
+
+    await loadPerfil();
   } catch (err) {
-    if (err.message.includes('Sesión')) {
+    console.error('Error al cargar el portal:', err);
+
+    const mensaje = err?.message || 'Error desconocido';
+
+    if (mensaje.includes('Sesión')) {
       doLogout();
-    } else {
-      toast(`Error: ${err.message}`, 'error');
+      return;
     }
+
+    toast(`Error: ${mensaje}`, 'error');
   }
 }
+
+
+
 
 /* ── HOME ────────────────────────────────────────────────── */
 function renderHome(det) {
@@ -1209,42 +1575,80 @@ function renderCredito(sol) {
   `;
 }
 
+
 async function verCartaTermino() {
-  if (!solicitudData?.id) { toast('No se puede abrir la carta', 'error'); return; }
+  const solicitudId =
+    creditoData?.solicitud_id ||
+    solicitudData?.solicitud_id ||
+    solicitudData?.id;
+
+  if (!solicitudId) {
+    toast(
+      'No se puede identificar la solicitud del préstamo',
+      'error'
+    );
+    return;
+  }
+
   try {
-    // Usar el endpoint del portal para carta de término
-    const res = await fetch(`${API}/carta-termino/${solicitudData.id}`, {
-      headers: { 'Authorization': `Bearer ${portalToken}` }
-    });
+    const res = await fetch(
+      `${API}/carta-termino/${solicitudId}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${portalToken}`,
+        },
+      }
+    );
+
     if (!res.ok) {
-      const d = await res.json();
-      toast(d.message || 'El crédito aún no está liquidado', 'error');
+      let mensaje =
+        'El crédito aún no está liquidado';
+
+      try {
+        const respuestaError = await res.json();
+
+        if (respuestaError?.message) {
+          mensaje = respuestaError.message;
+        }
+      } catch (errorJson) {
+        console.error(
+          'La respuesta de carta de término no contiene JSON:',
+          errorJson
+        );
+      }
+
+      toast(mensaje, 'error');
       return;
     }
+
     const html = await res.text();
-    const win  = window.open('', '_blank');
-    if (win) { win.document.open(); win.document.write(html); win.document.close(); }
-  } catch { toast('Error al abrir la carta', 'error'); }
+    const ventana = window.open('', '_blank');
+
+    if (!ventana) {
+      toast(
+        'El navegador bloqueó la ventana de la carta. Permite las ventanas emergentes para este sitio.',
+        'error'
+      );
+      return;
+    }
+
+    ventana.document.open();
+    ventana.document.write(html);
+    ventana.document.close();
+  } catch (err) {
+    console.error(
+      'Error al abrir la carta de término:',
+      err
+    );
+
+    toast(
+      'No fue posible abrir la carta de término',
+      'error'
+    );
+  }
 }
-    <div class="card">
-      <div class="card-header">
-        <div><div class="card-title">Tabla de amortización</div></div>
-      </div>
-      <div style="overflow-x:auto">
-        <table id="amortTable">
-          <thead><tr>
-            <th>#</th><th>Fecha pago</th><th>Saldo inicial</th>
-            <th>Capital</th><th>Interés</th><th>IVA</th>
-            <th>Pago total</th><th>Saldo final</th><th>Estado</th>
-          </tr></thead>
-          <tbody id="amortBody"><tr><td colspan="9" style="text-align:center;padding:24px">
-            <div class="loader"></div>
-          </td></tr></tbody>
-        </table>
-      </div>
-    </div>
-  `;
-}
+
 
 async function loadAmortizacion(creditoId) {
   try {
@@ -1273,50 +1677,968 @@ async function loadAmortizacion(creditoId) {
 /* ── DOCS ────────────────────────────────────────────────── */
 async function loadDocs(solicitudId) {
   const body = document.getElementById('docsBody');
-  if (!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:24px"><div class="loader"></div></div>';
+
+  if (!body) {
+    return;
+  }
+
+  body.dataset.solicitudId = solicitudId;
+
+  body.innerHTML = `
+    <div style="text-align:center;padding:24px">
+      <div class="loader"></div>
+    </div>
+  `;
+
   try {
-    // Usar el endpoint del portal que ya tiene autenticación
-    const d = await portalFetch(`/documentos/${solicitudId}`);
-    const docs = d.documentos || [];
-    if (!docs.length) {
-      body.innerHTML = `<div class="empty-state">
-        <div class="empty-icon">📭</div>
-        <div>Aún no hay documentos en tu expediente.<br>
-          <span style="font-size:12px;color:var(--text-3)">Contacta a tu asesor si necesitas agregar documentos.</span>
+    const respuesta = await portalFetch(
+      `/documentos/${solicitudId}`
+    );
+
+    const documentos = respuesta.documentos || [];
+    const resumen = respuesta.resumen || {};
+
+    if (!documentos.length) {
+      body.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <div>
+            No hay requisitos documentales configurados.
+          </div>
         </div>
-      </div>`;
+      `;
       return;
     }
-    const TIPO_LABELS = {
-      INE_FRENTE:'INE / IFE (Frente)', INE_REVERSO:'INE / IFE (Reverso)',
-      CURP:'CURP', RFC:'RFC', COMPROBANTE_DOMICILIO:'Comprobante de domicilio',
-      COMPROBANTE_INGRESOS:'Comprobante de ingresos', RECIBO_NOMINA:'Recibo de nómina',
-      ESTADO_CUENTA:'Estado de cuenta', CONSTANCIA_SAT:'Constancia de situación fiscal',
-      CONTRATO_LABORAL:'Contrato laboral', CONTRATO_CREDITO:'Contrato de crédito',
-      OTRO:'Otro documento',
-    };
-    body.innerHTML = docs.map(doc => `
-      <div class="doc-row">
-        <div class="doc-icon">${TIPO_ICONS[doc.tipo]||'📎'}</div>
-        <div class="doc-info">
-          <div class="doc-tipo">${TIPO_LABELS[doc.tipo] || doc.tipo.replace(/_/g,' ')}</div>
-          <div class="doc-name">${doc.nombre_archivo}</div>
-          <div class="doc-meta">${doc.tamanio_bytes ? (doc.tamanio_bytes/1024).toFixed(0)+' KB · ' : ''}${fmtDate(doc.created_at)}</div>
+
+    body.innerHTML = `
+      <div
+        style="
+          display:grid;
+          grid-template-columns:repeat(
+            auto-fit,
+            minmax(150px, 1fr)
+          );
+          gap:12px;
+          margin-bottom:20px;
+        "
+      >
+        <div class="info-item">
+          <div class="info-label">Requeridos</div>
+          <div class="info-value">
+            ${resumen.total || 0}
+          </div>
         </div>
-        <div style="flex-shrink:0">
-          ${doc.verificado
-            ? '<span class="badge activo" style="font-size:10px">✓ Verificado</span>'
-            : '<span style="font-size:11px;color:var(--amber);font-weight:500">⏳ En revisión</span>'}
+
+        <div class="info-item">
+          <div class="info-label">Faltantes</div>
+          <div class="info-value">
+            ${resumen.faltantes || 0}
+          </div>
         </div>
-      </div>`).join('');
+
+        <div class="info-item">
+          <div class="info-label">En revisión</div>
+          <div class="info-value">
+            ${resumen.en_revision || 0}
+          </div>
+        </div>
+
+        <div class="info-item">
+          <div class="info-label">Aprobados</div>
+          <div class="info-value">
+            ${resumen.aprobados || 0}
+          </div>
+        </div>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          flex-direction:column;
+          gap:12px;
+        "
+      >
+        ${documentos.map(documento => {
+          return renderDocumentoRequerido(
+            solicitudId,
+            documento
+          );
+        }).join('')}
+      </div>
+    `;
   } catch (err) {
-    body.innerHTML = `<div class="empty-state">
-      <div class="empty-icon">📭</div>
-      <div>Sin documentos registrados en tu expediente.</div>
-    </div>`;
+    console.error(
+      'Error al cargar documentos:',
+      err
+    );
+
+    body.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div>
+          No fue posible cargar los documentos.
+        </div>
+      </div>
+    `;
   }
 }
+
+
+function renderDocumentoRequerido(
+  solicitudId,
+  documento
+) {
+  const estado =
+    documento.estado_portal || 'FALTANTE';
+
+  const configuracionEstados = {
+    FALTANTE: {
+      texto: 'Faltante',
+      color: '#d29922',
+      fondo: 'rgba(210,153,34,.12)',
+    },
+    CARGADO: {
+      texto: 'Cargado',
+      color: '#58a6ff',
+      fondo: 'rgba(88,166,255,.12)',
+    },
+    EN_REVISION: {
+      texto: 'En revisión',
+      color: '#58a6ff',
+      fondo: 'rgba(88,166,255,.12)',
+    },
+    APROBADO: {
+      texto: 'Aprobado',
+      color: '#3fb950',
+      fondo: 'rgba(63,185,80,.12)',
+    },
+    RECHAZADO: {
+      texto: 'Rechazado',
+      color: '#f85149',
+      fondo: 'rgba(248,81,73,.12)',
+    },
+    REEMPLAZADO: {
+      texto: 'Reemplazado',
+      color: '#8b949e',
+      fondo: 'rgba(139,148,158,.12)',
+    },
+  };
+
+  const estadoVisual =
+    configuracionEstados[estado] ||
+    configuracionEstados.FALTANTE;
+
+  const inputId =
+    `archivo_${documento.tipo}`;
+
+  const puedeSubir =
+    estado === 'FALTANTE' ||
+    estado === 'RECHAZADO';
+
+  const puedeVer =
+    Boolean(documento.documento_id);
+
+  const formatos = [];
+
+  if (documento.permite_pdf) {
+    formatos.push('PDF');
+  }
+
+  if (documento.permite_imagen) {
+    formatos.push('JPG, PNG o WEBP');
+  }
+
+  return `
+    <div
+      style="
+        border:1px solid var(--border);
+        border-radius:12px;
+        padding:16px;
+        background:var(--bg-raised);
+      "
+    >
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-start;
+          gap:16px;
+          flex-wrap:wrap;
+        "
+      >
+        <div style="flex:1;min-width:220px">
+          <div
+            style="
+              font-weight:700;
+              margin-bottom:5px;
+            "
+          >
+            ${documento.nombre}
+            ${
+              documento.obligatorio
+                ? '<span style="color:#f85149">*</span>'
+                : ''
+            }
+          </div>
+
+          <div
+            style="
+              color:var(--text-3);
+              font-size:12px;
+              line-height:1.5;
+            "
+          >
+            ${documento.descripcion || ''}
+          </div>
+
+          ${
+            documento.nombre_archivo
+              ? `
+                <div
+                  style="
+                    margin-top:8px;
+                    color:var(--text-2);
+                    font-size:12px;
+                  "
+                >
+                  Archivo: ${documento.nombre_archivo}
+                </div>
+              `
+              : ''
+          }
+
+          ${
+            documento.observaciones
+              ? `
+                <div
+                  style="
+                    margin-top:10px;
+                    padding:10px;
+                    border-radius:8px;
+                    background:rgba(248,81,73,.08);
+                    color:#f85149;
+                    font-size:12px;
+                  "
+                >
+                  Observación:
+                  ${documento.observaciones}
+                </div>
+              `
+              : ''
+          }
+        </div>
+
+        <span
+          style="
+            padding:5px 10px;
+            border-radius:20px;
+            font-size:11px;
+            font-weight:700;
+            color:${estadoVisual.color};
+            background:${estadoVisual.fondo};
+          "
+        >
+          ${estadoVisual.texto}
+        </span>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          gap:8px;
+          flex-wrap:wrap;
+          margin-top:14px;
+        "
+      >
+        ${
+          puedeVer
+            ? `
+              <button
+                type="button"
+                class="btn-sm"
+                onclick="verDocumentoPortal(
+                  '${documento.documento_id}'
+                )"
+              >
+                Ver documento
+              </button>
+            `
+            : ''
+        }
+
+        ${
+          puedeSubir
+            ? `
+              <input
+                type="file"
+                id="${inputId}"
+                accept="${
+                  documento.permite_imagen
+                    ? '.pdf,.jpg,.jpeg,.png,.webp'
+                    : '.pdf'
+                }"
+                style="display:none"
+                onchange="mostrarArchivoSeleccionado(
+                  '${documento.tipo}'
+                )"
+              >
+
+              <button
+                type="button"
+                class="btn-sm"
+                onclick="document.getElementById(
+                  '${inputId}'
+                ).click()"
+              >
+                Seleccionar archivo
+              </button>
+
+              <button
+                type="button"
+                class="btn-sm primary"
+                id="subir_${documento.tipo}"
+                style="display:none"
+                onclick="subirDocumentoPortal(
+                  '${solicitudId}',
+                  '${documento.tipo}'
+                )"
+              >
+                Subir archivo
+              </button>
+
+              <span
+                id="nombre_${documento.tipo}"
+                style="
+                  align-self:center;
+                  color:var(--text-3);
+                  font-size:12px;
+                "
+              ></span>
+            `
+            : ''
+        }
+      </div>
+
+      ${
+        puedeSubir
+          ? `
+            <div
+              style="
+                margin-top:8px;
+                color:var(--text-3);
+                font-size:11px;
+              "
+            >
+              Formatos: ${formatos.join(' o ')}.
+              Tamaño máximo:
+              ${parseInt(10, 10)} MB.
+            </div>
+          `
+          : ''
+      }
+    </div>
+  `;
+}
+
+
+function mostrarArchivoSeleccionado(tipo) {
+  const input =
+    document.getElementById(`archivo_${tipo}`);
+
+  const texto =
+    document.getElementById(`nombre_${tipo}`);
+
+  const boton =
+    document.getElementById(`subir_${tipo}`);
+
+  const archivo = input?.files?.[0];
+
+  if (!archivo) {
+    if (texto) {
+      texto.textContent = '';
+    }
+
+    if (boton) {
+      boton.style.display = 'none';
+    }
+
+    return;
+  }
+
+  if (texto) {
+    texto.textContent = archivo.name;
+  }
+
+  if (boton) {
+    boton.style.display = 'inline-flex';
+  }
+}
+
+async function subirDocumentoPortal(
+  solicitudId,
+  tipo
+) {
+  const input =
+    document.getElementById(`archivo_${tipo}`);
+
+  const boton =
+    document.getElementById(`subir_${tipo}`);
+
+  const archivo = input?.files?.[0];
+
+  if (!archivo) {
+    toast(
+      'Selecciona un archivo antes de continuar',
+      'error'
+    );
+    return;
+  }
+
+  const maxBytes = 10 * 1024 * 1024;
+
+  if (archivo.size > maxBytes) {
+    toast(
+      'El archivo supera el límite de 10 MB',
+      'error'
+    );
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('archivo', archivo);
+
+  const textoOriginal =
+    boton?.textContent || 'Subir archivo';
+
+  try {
+    if (boton) {
+      boton.disabled = true;
+      boton.textContent = 'Subiendo...';
+    }
+
+    const respuesta = await fetch(
+      `${API}/documentos/${solicitudId}/${tipo}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${portalToken}`,
+        },
+        body: formData,
+      }
+    );
+
+    let datos;
+
+    try {
+      datos = await respuesta.json();
+    } catch {
+      datos = {
+        message:
+          'El servidor devolvió una respuesta no válida.',
+      };
+    }
+
+    if (!respuesta.ok) {
+      throw new Error(
+        datos.message ||
+        'No fue posible subir el documento.'
+      );
+    }
+
+    toast(
+      datos.message ||
+      'Documento enviado a revisión.',
+      'success'
+    );
+
+    await loadDocs(solicitudId);
+  } catch (err) {
+    console.error(
+      'Error al subir documento:',
+      err
+    );
+
+    toast(
+      err.message ||
+      'No fue posible subir el documento.',
+      'error'
+    );
+  } finally {
+    if (boton) {
+      boton.disabled = false;
+      boton.textContent = textoOriginal;
+    }
+  }
+}
+
+async function verDocumentoPortal(documentoId) {
+  try {
+    const respuesta = await portalFetch(
+      `/documentos/archivo/${documentoId}`
+    );
+
+    if (!respuesta.url) {
+      throw new Error(
+        'No se recibió una dirección para el documento.'
+      );
+    }
+
+    const ventana = window.open(
+      respuesta.url,
+      '_blank',
+      'noopener,noreferrer'
+    );
+
+    if (!ventana) {
+      toast(
+        'Permite las ventanas emergentes para consultar el documento.',
+        'error'
+      );
+    }
+  } catch (err) {
+    console.error(
+      'Error al abrir documento:',
+      err
+    );
+
+    toast(
+      err.message ||
+      'No fue posible abrir el documento.',
+      'error'
+    );
+  }
+}
+
+
+async function loadCartasCredito(creditoId) {
+  const body =
+    document.getElementById('cartasBody');
+
+  if (!body) {
+    return;
+  }
+
+  body.innerHTML = `
+    <div style="text-align:center;padding:24px">
+      <div class="loader"></div>
+    </div>
+  `;
+
+  try {
+    const respuesta = await portalFetch(
+      `/creditos/${creditoId}/cartas`
+    );
+
+    const cartas = respuesta.cartas || [];
+    const solicitudId =
+      respuesta.credito?.solicitud_id;
+
+    if (!cartas.length) {
+      body.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📄</div>
+          <div>
+            Todavía no hay cartas disponibles.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    body.innerHTML = cartas.map(carta =>
+      renderCartaCredito(
+        solicitudId,
+        carta
+      )
+    ).join('');
+  } catch (err) {
+    console.error(
+      'Error al cargar cartas:',
+      err
+    );
+
+    body.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <div>
+          No fue posible cargar las cartas.
+        </div>
+      </div>
+    `;
+  }
+}
+
+
+function renderCartaCredito(
+  solicitudId,
+  carta
+) {
+  const firmado = carta.firmado;
+
+  const estado =
+    firmado?.estado || 'PENDIENTE_FIRMA';
+
+  const etiquetas = {
+    PENDIENTE_FIRMA: 'Pendiente de firma',
+    EN_REVISION: 'Firmado, en revisión',
+    CARGADO: 'Firmado, en revisión',
+    APROBADO: 'Firmado y aprobado',
+    RECHAZADO: 'Firma rechazada',
+  };
+
+  const puedeSubir =
+    !firmado ||
+    estado === 'RECHAZADO';
+
+  return `
+    <div
+      style="
+        border:1px solid var(--border);
+        border-radius:12px;
+        padding:16px;
+        margin-bottom:12px;
+      "
+    >
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          gap:16px;
+          flex-wrap:wrap;
+        "
+      >
+        <div style="flex:1;min-width:220px">
+          <div
+            style="
+              font-weight:700;
+              margin-bottom:6px;
+            "
+          >
+            ${carta.nombre}
+          </div>
+
+          <div
+            style="
+              color:var(--text-3);
+              font-size:12px;
+              line-height:1.5;
+            "
+          >
+            ${carta.descripcion}
+          </div>
+
+          ${
+            firmado?.nombre_archivo
+              ? `
+                <div
+                  style="
+                    margin-top:8px;
+                    font-size:12px;
+                    color:var(--text-2);
+                  "
+                >
+                  Archivo firmado:
+                  ${firmado.nombre_archivo}
+                </div>
+              `
+              : ''
+          }
+
+          ${
+            firmado?.observaciones
+              ? `
+                <div
+                  style="
+                    margin-top:10px;
+                    padding:10px;
+                    border-radius:8px;
+                    background:rgba(248,81,73,.08);
+                    color:#f85149;
+                    font-size:12px;
+                  "
+                >
+                  Observación:
+                  ${firmado.observaciones}
+                </div>
+              `
+              : ''
+          }
+        </div>
+
+        <span class="badge activo">
+          ${etiquetas[estado] || estado}
+        </span>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          gap:8px;
+          flex-wrap:wrap;
+          margin-top:14px;
+        "
+      >
+        <button
+          type="button"
+          class="btn-sm"
+          onclick="abrirDocumentoGenerado(
+            '${carta.url_original}'
+          )"
+        >
+          Ver e imprimir
+        </button>
+
+        ${
+          firmado?.id
+            ? `
+              <button
+                type="button"
+                class="btn-sm"
+                onclick="verDocumentoPortal(
+                  '${firmado.id}'
+                )"
+              >
+                Ver firmado
+              </button>
+            `
+            : ''
+        }
+
+        ${
+          puedeSubir
+            ? `
+              <input
+                type="file"
+                id="firma_${carta.tipo_firmado}"
+                accept=".pdf,application/pdf"
+                style="display:none"
+                onchange="mostrarFirmaSeleccionada(
+                  '${carta.tipo_firmado}'
+                )"
+              >
+
+              <button
+                type="button"
+                class="btn-sm"
+                onclick="document.getElementById(
+                  'firma_${carta.tipo_firmado}'
+                ).click()"
+              >
+                Seleccionar PDF firmado
+              </button>
+
+              <button
+                type="button"
+                class="btn-sm primary"
+                id="subir_firma_${carta.tipo_firmado}"
+                style="display:none"
+                onclick="subirDocumentoFirmado(
+                  '${solicitudId}',
+                  '${carta.tipo_firmado}'
+                )"
+              >
+                Subir firmado
+              </button>
+
+              <span
+                id="nombre_firma_${carta.tipo_firmado}"
+                style="
+                  align-self:center;
+                  color:var(--text-3);
+                  font-size:12px;
+                "
+              ></span>
+            `
+            : ''
+        }
+      </div>
+    </div>
+  `;
+}
+
+
+
+async function abrirDocumentoGenerado(ruta) {
+  try {
+    const respuesta = await fetch(
+      `${window.location.origin}/api/v1${ruta}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${portalToken}`,
+        },
+      }
+    );
+
+    if (!respuesta.ok) {
+      let mensaje =
+        'No fue posible abrir el documento.';
+
+      try {
+        const error = await respuesta.json();
+        mensaje = error.message || mensaje;
+      } catch {
+        // Puede ser una respuesta HTML o texto.
+      }
+
+      throw new Error(mensaje);
+    }
+
+    const html = await respuesta.text();
+    const ventana = window.open('', '_blank');
+
+    if (!ventana) {
+      throw new Error(
+        'Permite las ventanas emergentes para abrir el documento.'
+      );
+    }
+
+    ventana.document.open();
+    ventana.document.write(html);
+    ventana.document.close();
+  } catch (err) {
+    console.error(
+      'Error al abrir documento generado:',
+      err
+    );
+
+    toast(
+      err.message ||
+      'No fue posible abrir el documento.',
+      'error'
+    );
+  }
+}
+
+
+
+
+
+function mostrarFirmaSeleccionada(tipo) {
+  const input =
+    document.getElementById(`firma_${tipo}`);
+
+  const nombre =
+    document.getElementById(
+      `nombre_firma_${tipo}`
+    );
+
+  const boton =
+    document.getElementById(
+      `subir_firma_${tipo}`
+    );
+
+  const archivo = input?.files?.[0];
+
+  if (!archivo) {
+    if (nombre) {
+      nombre.textContent = '';
+    }
+
+    if (boton) {
+      boton.style.display = 'none';
+    }
+
+    return;
+  }
+
+  if (nombre) {
+    nombre.textContent = archivo.name;
+  }
+
+  if (boton) {
+    boton.style.display = 'inline-flex';
+  }
+}
+
+
+async function subirDocumentoFirmado(
+  solicitudId,
+  tipo
+) {
+  const input =
+    document.getElementById(`firma_${tipo}`);
+
+  const boton =
+    document.getElementById(
+      `subir_firma_${tipo}`
+    );
+
+  const archivo = input?.files?.[0];
+
+  if (!archivo) {
+    toast(
+      'Selecciona el PDF firmado.',
+      'error'
+    );
+    return;
+  }
+
+  if (archivo.type !== 'application/pdf') {
+    toast(
+      'El documento firmado debe ser PDF.',
+      'error'
+    );
+    return;
+  }
+
+  if (archivo.size > 10 * 1024 * 1024) {
+    toast(
+      'El archivo supera el límite de 10 MB.',
+      'error'
+    );
+    return;
+  }
+
+  const formulario = new FormData();
+  formulario.append('archivo', archivo);
+
+  try {
+    if (boton) {
+      boton.disabled = true;
+      boton.textContent = 'Subiendo...';
+    }
+
+    const respuesta = await fetch(
+      `${API}/documentos/${solicitudId}/${tipo}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization:
+            `Bearer ${portalToken}`,
+        },
+        body: formulario,
+      }
+    );
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok) {
+      throw new Error(
+        datos.message ||
+        'No fue posible cargar el documento.'
+      );
+    }
+
+    toast(
+      'Documento firmado enviado a revisión.',
+      'success'
+    );
+
+    await loadCartasCredito(
+      creditoData.id
+    );
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    if (boton) {
+      boton.disabled = false;
+      boton.textContent = 'Subir firmado';
+    }
+  }
+}
+
+
 
 /* ── PERFIL ──────────────────────────────────────────────── */
 async function loadPerfil() {

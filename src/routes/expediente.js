@@ -78,7 +78,8 @@ router.post('/:solicitudId/subir',
 
     const client = await pool.connect();
     try {
-      
+    await client.query('BEGIN');
+  
       const resultados = [];
 
       for (let i = 0; i < req.files.length; i++) {
@@ -99,14 +100,14 @@ router.post('/:solicitudId/subir',
           `INSERT INTO documentos
              (solicitud_id, tipo, nombre_archivo, url_storage, tamanio_bytes, mime_type)
            VALUES ($1, $2::tipo_doc_enum, $3, $4, $5, $6)
-           OUTPUT INSERTED.id, tipo, nombre_archivo, tamanio_bytes, created_at`,
+           RETURNING id, tipo, nombre_archivo, tamanio_bytes, created_at`,
           [solicitudId, tipo, file.originalname, url, sizeBytes, mimeType]
         );
 
         resultados.push(rows[0]);
       }
 
-      await client.commit();
+      await client.query('COMMIT');
       logger.info('Documentos subidos', { solicitudId, cantidad: resultados.length });
 
       res.status(201).json({
@@ -115,7 +116,7 @@ router.post('/:solicitudId/subir',
         documentos: resultados,
       });
     } catch (err) {
-      await client.rollback();
+      await client.query('ROLLBACK');
       next(err);
     } finally {
       client.release();
@@ -135,17 +136,31 @@ router.get('/:solicitudId',
       const { solicitudId } = req.params;
 
       const { rows } = await db(
-        `SELECT
-           d.id, d.tipo, d.nombre_archivo, d.url_storage,
-           d.tamanio_bytes, d.mime_type,
-           d.verificado, d.created_at,
-           u.nombre AS verificado_por_nombre
-         FROM documentos d
-         LEFT JOIN usuarios_sistema u ON u.id = d.verificado_por
-         WHERE d.solicitud_id = $1
-         ORDER BY d.created_at DESC`,
-        [solicitudId]
-      );
+  `SELECT
+     d.id,
+     d.tipo,
+     d.nombre_archivo,
+     d.url_storage,
+     d.tamanio_bytes,
+     d.mime_type,
+     d.verificado,
+     d.estado,
+     d.observaciones,
+     d.origen,
+     d.activo,
+     d.fecha_verificacion,
+     d.created_at,
+     u.nombre AS verificado_por_nombre
+   FROM documentos d
+   LEFT JOIN usuarios_sistema u
+     ON u.id = d.verificado_por
+   WHERE d.solicitud_id = $1
+     AND d.activo = TRUE
+   ORDER BY d.created_at DESC`,
+  [solicitudId]
+);
+
+
 
       // Calcular checklist de completitud
       const tiposSubidos = new Set(rows.map(r => r.tipo));
@@ -164,11 +179,26 @@ router.get('/:solicitudId',
         ok: true,
         documentos: rows,
         checklist,
-        resumen: {
-          total:       rows.length,
-          verificados: rows.filter(r => r.verificado).length,
-          completo,
-        },
+        
+	
+	resumen: {
+  total: DOCS_REQUERIDOS.length,
+
+  verificados: DOCS_REQUERIDOS.filter(
+    requerido => {
+      const documento = rows.find(
+        row => row.tipo === requerido.tipo
+      );
+
+      return documento?.verificado === true;
+    }
+  ).length,
+
+  completo,
+},
+
+
+
       });
     } catch (err) { next(err); }
   }
@@ -207,38 +237,124 @@ router.get('/:solicitudId/:docId/ver',
   }
 );
 
+
+
 // ════════════════════════════════════════════════════════════════
 // PATCH /api/v1/expediente/:solicitudId/:docId/verificar
-// Marca un documento como verificado (o lo desmarca).
+// Aprueba, rechaza o regresa un documento a revisión.
 // ════════════════════════════════════════════════════════════════
-router.patch('/:solicitudId/:docId/verificar',
+router.patch(
+  '/:solicitudId/:docId/verificar',
   authMiddleware,
   requireRole('ADMIN', 'ANALISTA'),
   param('solicitudId').isUUID(),
   param('docId').isUUID(),
-  body('verificado').isBoolean(),
+  body('estado')
+    .isIn([
+      'APROBADO',
+      'RECHAZADO',
+      'EN_REVISION',
+    ])
+    .withMessage('Estado documental inválido'),
+  body('observaciones')
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .isLength({ max: 1000 }),
   handleValidationErrors,
   async (req, res, next) => {
     try {
-      const { solicitudId, docId } = req.params;
-      const { verificado } = req.body;
+      const {
+        solicitudId,
+        docId,
+      } = req.params;
+
+      const {
+        estado,
+        observaciones,
+      } = req.body;
+
+      if (
+        estado === 'RECHAZADO' &&
+        !String(observaciones || '').trim()
+      ) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            'Debes indicar el motivo del rechazo.',
+        });
+      }
+
+      const verificado =
+        estado === 'APROBADO';
+
+      const observacionFinal =
+        estado === 'RECHAZADO'
+          ? String(observaciones).trim()
+          : null;
 
       const { rows } = await db(
         `UPDATE documentos
-         SET verificado = $1,
-             verificado_por = $2
-         WHERE id=$3 AND solicitud_id=$4
-         OUTPUT INSERTED.id, tipo, verificado`,
-        [verificado, verificado ? req.user.id : null, docId, solicitudId]
+         SET estado = $1,
+             verificado = $2,
+             observaciones = $3,
+             verificado_por = $4,
+             fecha_verificacion = CURRENT_TIMESTAMP
+         WHERE id = $5
+           AND solicitud_id = $6
+           AND activo = TRUE
+         RETURNING
+           id,
+           tipo,
+           estado,
+           verificado,
+           observaciones,
+           fecha_verificacion`,
+        [
+          estado,
+          verificado,
+          observacionFinal,
+          req.user.id,
+          docId,
+          solicitudId,
+        ]
       );
 
-      if (!rows.length) return res.status(404).json({ ok: false, message: 'Documento no encontrado' });
+      if (!rows.length) {
+        return res.status(404).json({
+          ok: false,
+          message:
+            'Documento no encontrado o ya no está activo.',
+        });
+      }
 
-      logger.info('Documento verificado', { docId, verificado, usuario: req.user.email });
-      res.json({ ok: true, documento: rows[0] });
-    } catch (err) { next(err); }
+      logger.info(
+        'Estado documental actualizado',
+        {
+          docId,
+          solicitudId,
+          estado,
+          usuario: req.user.email,
+        }
+      );
+
+      res.json({
+        ok: true,
+        message:
+          estado === 'APROBADO'
+            ? 'Documento aprobado correctamente.'
+            : estado === 'RECHAZADO'
+              ? 'Documento rechazado.'
+              : 'Documento regresado a revisión.',
+        documento: rows[0],
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 );
+
+
 
 // ════════════════════════════════════════════════════════════════
 // DELETE /api/v1/expediente/:solicitudId/:docId

@@ -1,0 +1,244 @@
+BEGIN;
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type
+        WHERE typname = 'layout_tipo_enum'
+    ) THEN
+        CREATE TYPE layout_tipo_enum AS ENUM (
+            'DESCUENTO',
+            'RECUPERACION'
+        );
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type
+        WHERE typname = 'layout_estado_enum'
+    ) THEN
+        CREATE TYPE layout_estado_enum AS ENUM (
+            'PENDIENTE',
+            'ENVIADO',
+            'CONFIRMADO',
+            'RECHAZADO'
+        );
+    END IF;
+END
+$$;
+
+CREATE TABLE IF NOT EXISTS layouts_nomina (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    credito_id UUID NOT NULL,
+    amortizacion_id BIGINT NOT NULL,
+
+    periodo VARCHAR(7) NOT NULL,
+    numero_descuento SMALLINT NOT NULL,
+
+    tipo layout_tipo_enum NOT NULL,
+    tipo_frecuencia frecuencia_pago_enum NOT NULL,
+
+    importe NUMERIC(12,2) NOT NULL,
+    estado layout_estado_enum NOT NULL DEFAULT 'PENDIENTE',
+
+    fecha_generacion TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_envio TIMESTAMPTZ,
+    fecha_confirmacion TIMESTAMPTZ,
+    fecha_rechazo TIMESTAMPTZ,
+
+    enviado_por UUID,
+    confirmado_por UUID,
+
+    referencia_bancaria VARCHAR(120),
+    notas TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT layouts_nomina_credito_fkey
+        FOREIGN KEY (credito_id)
+        REFERENCES creditos(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT layouts_nomina_amortizacion_fkey
+        FOREIGN KEY (amortizacion_id)
+        REFERENCES amortizacion(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT layouts_nomina_enviado_por_fkey
+        FOREIGN KEY (enviado_por)
+        REFERENCES usuarios_sistema(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT layouts_nomina_confirmado_por_fkey
+        FOREIGN KEY (confirmado_por)
+        REFERENCES usuarios_sistema(id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT layouts_nomina_periodo_check
+        CHECK (periodo ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+
+    CONSTRAINT layouts_nomina_numero_descuento_check
+        CHECK (numero_descuento > 0),
+
+    CONSTRAINT layouts_nomina_importe_check
+        CHECK (importe > 0),
+
+    CONSTRAINT layouts_nomina_credito_amortizacion_check
+        UNIQUE (
+            credito_id,
+            amortizacion_id,
+            numero_descuento,
+            tipo
+        )
+);
+
+CREATE INDEX IF NOT EXISTS idx_layouts_nomina_periodo
+    ON layouts_nomina(periodo);
+
+CREATE INDEX IF NOT EXISTS idx_layouts_nomina_estado
+    ON layouts_nomina(estado);
+
+CREATE INDEX IF NOT EXISTS idx_layouts_nomina_credito
+    ON layouts_nomina(credito_id);
+
+CREATE INDEX IF NOT EXISTS idx_layouts_nomina_amortizacion
+    ON layouts_nomina(amortizacion_id);
+
+CREATE INDEX IF NOT EXISTS idx_layouts_nomina_periodo_tipo_estado
+    ON layouts_nomina(periodo, tipo, estado);
+
+CREATE OR REPLACE FUNCTION sp_generar_layout_periodo(
+    p_periodo VARCHAR,
+    p_tipo layout_tipo_enum,
+    p_empresa_id INTEGER DEFAULT NULL
+)
+RETURNS TABLE (
+    insertados INTEGER,
+    ya_existian INTEGER
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_fecha_inicio DATE;
+    v_fecha_fin DATE;
+    v_candidatos INTEGER := 0;
+    v_insertados INTEGER := 0;
+BEGIN
+    IF p_periodo IS NULL
+       OR p_periodo !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' THEN
+        RAISE EXCEPTION 'Periodo inválido: %. Formato esperado: YYYY-MM',
+            p_periodo;
+    END IF;
+
+    v_fecha_inicio := TO_DATE(p_periodo || '-01', 'YYYY-MM-DD');
+    v_fecha_fin := (v_fecha_inicio + INTERVAL '1 month')::DATE;
+
+    SELECT COUNT(*)
+    INTO v_candidatos
+    FROM (*        SELECT
+            c.id,
+ *          a.id,
+            gs.num*ro
+        FROM creditos c
+       *JOIN solicitudes s
+            ON *.id = c.solicitud_id
+        JOIN *mortizacion a
+            ON a.cre*ito_id = c.id
+        CROSS JOIN L*TERAL generate_series(
+           *1,
+            CASE c.frecuencia_p*go::TEXT
+                WHEN 'SEM*NAL' THEN 4
+                WHEN '*UINCENAL' THEN 2
+                E*SE 1
+            END
+        ) AS *s(numero)
+        WHERE c.estado::*EXT = 'ACTIVO'
+          AND a.pag*do = FALSE
+          AND a.fecha_p*go >= v_fecha_inicio
+          AND*a.fecha_pago < v_fecha_fin
+       *  AND (
+              p_empresa_id*IS NULL
+              OR s.empresa*id = p_empresa_id
+          )
+    * candidatos;
+
+    INSERT INTO layo*ts_nomina (
+        credito_id,
+  *     amortizacion_id,
+        peri*do,
+        numero_descuento,
+    *   tipo,
+        tipo_frecuencia,
+*       importe,
+        estado
+   *)
+    SELECT
+        c.id,
+       *a.id,
+        p_periodo,
+        (*            (
+                a.pe*iodo - 1
+            ) *
+         *  CASE c.frecuencia_pago::TEXT
+   *            WHEN 'SEMANAL' THEN 4
+*               WHEN 'QUINCENAL' TH*N 2
+                ELSE 1
+       *    END
+        ) + gs.numero,
+   *    p_tipo,
+        c.frecuencia_p*go,
+        ROUND(
+            a.p*go_total /
+            CASE c.frec*encia_pago::TEXT
+                W*EN 'SEMANAL' THEN 4
+              * WHEN 'QUINCENAL' THEN 2
+         *      ELSE 1
+            END,
+    *       2
+        ),
+        'PENDI*NTE'::layout_estado_enum
+    FROM *reditos c
+    JOIN solicitudes s
+ *      ON s.id = c.solicitud_id
+   *JOIN amortizacion a
+        ON a.c*edito_id = c.id
+    CROSS JOIN LAT*RAL generate_series(
+        1,
+  *     CASE c.frecuencia_pago::TEXT
+*           WHEN 'SEMANAL' THEN 4
+ *          WHEN 'QUINCENAL' THEN 2
+*           ELSE 1
+        END
+    * AS gs(numero)
+    WHERE c.estado:*TEXT = 'ACTIVO'
+      AND a.pagado*= FALSE
+      AND a.fecha_pago >= *_fecha_inicio
+      AND a.fecha_pa*o < v_fecha_fin
+      AND (
+      *   p_empresa_id IS NULL
+          *R s.empresa_id = p_empresa_id
+    * )
+    ON CONFLICT (
+        credi*o_id,
+        amortizacion_id,
+   *    numero_descuento,
+        tipo*    )
+    DO NOTHING;
+
+    GET DIA*NOSTICS v_insertados = ROW_COUNT;
+*    RETURN QUERY
+    SELECT
+      * v_insertados,
+        GREATEST(v_*andidatos - v_insertados, 0);
+END;*$$;
+
+COMMIT;
